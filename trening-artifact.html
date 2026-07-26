@@ -457,7 +457,7 @@ body {
 'use strict';
 
 // Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
-const APP_VERSION = '006';
+const APP_VERSION = '007';
 
 // ============================================================
 // DANE PLANU — powrót do treningów po epicondylitis lateralis
@@ -2310,7 +2310,7 @@ function trainerPlanCard() {
     const done = S.customPlan.workouts.filter(plannedDone).length;
     return `<div class="card">
       <h3>📋 ${esc(m.nazwa)}</h3>
-      <p class="muted">${m.trener ? 'Trener: ' + esc(m.trener) + ' · ' : ''}${done}/${total} treningów wykonanych
+      <p class="muted">${m.trener ? 'Trener: ' + esc(m.trener) + ' · ' : ''}${m.zawodnik ? 'Zawodnik: ' + esc(m.zawodnik) + ' · ' : ''}${done}/${total} treningów wykonanych
         · ${fmtDate(S.customPlan.workouts[0].date)} – ${fmtDate(S.customPlan.workouts[total - 1].date)}</p>
       ${m.opis ? `<p class="muted">${esc(m.opis)}</p>` : ''}
       ${m.uwagi ? `<p class="muted">📝 ${esc(m.uwagi)}</p>` : ''}
