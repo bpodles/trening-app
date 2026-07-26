@@ -163,6 +163,18 @@ body {
 .ex-card.st-caution { border-left-color: var(--warn); }
 .ex-card.st-blocked, .ex-card.st-stop, .ex-card.ex-paused { border-left-color: var(--danger); opacity: 0.92; }
 .ex-card.ex-done { opacity: 0.82; }
+/* Karty ćwiczeń w aktywnej sesji to <details> — tylko bieżące jest rozwinięte. */
+.ex-card > summary {
+  cursor: pointer; list-style: none; position: relative; padding-right: 20px;
+}
+.ex-card > summary::-webkit-details-marker { display: none; }
+.ex-card > summary::after {
+  content: '▸'; position: absolute; top: 2px; right: 0;
+  color: var(--text-muted); font-size: 0.9rem;
+}
+.ex-card[open] > summary::after { content: '▾'; }
+.ex-summary-line { color: var(--text-muted); font-size: 0.8rem; margin-top: 4px; }
+.ex-body { margin-top: 4px; }
 .ex-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .ex-name { font-weight: 700; font-size: 1.03rem; line-height: 1.3; text-wrap: balance; }
 .ex-badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
@@ -273,7 +285,7 @@ body {
 #rest-timer {
   position: fixed; left: 8px; right: 8px;
   bottom: calc(78px + env(safe-area-inset-bottom));
-  background: var(--accent); color: var(--accent-contrast); border-radius: 16px;
+  background: var(--danger); color: var(--accent-contrast); border-radius: 16px;
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; z-index: 30;
   box-shadow: var(--shadow); transition: background 0.2s ease;
@@ -468,7 +480,7 @@ body {
 'use strict';
 
 // Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
-const APP_VERSION = '009';
+const APP_VERSION = '010';
 
 // ============================================================
 // DANE PLANU — powrót do treningów po epicondylitis lateralis
@@ -1670,10 +1682,40 @@ function pendingFollowUps() {
   );
 }
 
-// ---------------- Timer przerwy (wizualny — bez dźwięku/wibracji/powiadomień) ----------------
+// ---------------- Timer przerwy (wizualny + 3 piknięcia na koniec; bez wibracji/powiadomień) ----------------
 const timer = { endsAt: null, exName: '', iv: null };
 
+// AudioContext tworzony leniwie, ale ZAWSZE w odpowiedzi na prawdziwe tapnięcie
+// (startTimer jest wywoływane tylko z handlerów kliknięć) — to odblokowuje
+// dźwięk na iOS Safari, mimo że sam beep odpala się później, asynchronicznie.
+let audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* brak wsparcia — po cichu ignoruj */ }
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  return audioCtx;
+}
+function beepThrice() {
+  const ctx = audioCtx;
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  [0, 0.35, 0.7].forEach(offset => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, t0 + offset);
+    gain.gain.exponentialRampToValueAtTime(0.35, t0 + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + offset + 0.18);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0 + offset); osc.stop(t0 + offset + 0.2);
+  });
+}
+
 function startTimer(seconds, exName) {
+  ensureAudioCtx();
   timer.endsAt = Date.now() + seconds * 1000;
   timer.exName = exName;
   clearInterval(timer.iv);
@@ -1697,6 +1739,7 @@ function tickTimer() {
     box.classList.add('rt-done');
     box.querySelector('.rt-label').textContent = 'Koniec przerwy — dawaj!';
     clearInterval(timer.iv);
+    beepThrice();
     setTimeout(stopTimer, 8000);
     return;
   }
@@ -1813,9 +1856,11 @@ function rpeInfoModal() {
 }
 
 document.body.addEventListener('click', e => {
-  if (e.target.closest('[data-rpe-info]')) { rpeInfoModal(); return; }
+  // preventDefault: te plakietki bywają wewnątrz <summary> karty ćwiczenia —
+  // bez tego tapnięcie otwierałoby modal I jednocześnie zwijało/rozwijało kartę.
+  if (e.target.closest('[data-rpe-info]')) { e.preventDefault(); rpeInfoModal(); return; }
   const h = e.target.closest('[data-hint]');
-  if (h) hintModal(h.dataset.hint);
+  if (h) { e.preventDefault(); hintModal(h.dataset.hint); }
 });
 
 // ---------------- WIDOK: Trening ----------------
@@ -2035,7 +2080,10 @@ function renderActiveSession() {
   </div>`;
 
   html += warmupCard(s.warmup, true);
-  html += s.exercises.map((e, ei) => renderExerciseCard(e, ei)).join('');
+  // Bieżące ćwiczenie = pierwsze niepominięte i jeszcze niedokończone —
+  // tylko ono renderuje się rozwinięte, reszta jako zwinięte belki (<details>).
+  const currentIndex = s.exercises.findIndex(e => !e.skipped && e.sets.length < e.targetSets);
+  html += s.exercises.map((e, ei) => renderExerciseCard(e, ei, ei === currentIndex)).join('');
   html += `<button class="btn btn-primary btn-full btn-big" id="finish-workout">✔ Zakończ trening</button>
     <button class="btn btn-full btn-ghost" id="cancel-workout">Anuluj (bez zapisu)</button>`;
 
@@ -2074,12 +2122,13 @@ function renderActiveSession() {
   });
 }
 
-function renderExerciseCard(e, ei) {
+function renderExerciseCard(e, ei, isCurrent) {
   const d = exDef(e.ex);
   const done = e.sets.length >= e.targetSets;
   const paused = isPaused(e.ex);
   const nextSet = e.sets.length + 1;
   const stCls = e.skipped ? 'st-stop' : (done ? 'st-done' : `st-${e.suggestStatus || 'new'}`);
+  const doneExtra = done ? 'ex-done' : '';
 
   let setsHtml = e.sets.map((st, i) =>
     `<div class="set-done">
@@ -2093,7 +2142,10 @@ function renderExerciseCard(e, ei) {
   let inputHtml = '';
   if (!done && !e.skipped) {
     const defReps = parseInt(e.targetReps) || '';
-    const defW = e.targetWeight != null ? e.targetWeight : '';
+    // Ciężar domyślny: to, co wpisano w POPRZEDNIEJ serii TEGO ćwiczenia w tej
+    // sesji (jeśli już jakąś zalogowano) — inaczej sugestia z silnika progresji.
+    const lastLoggedWeight = e.sets.length ? e.sets[e.sets.length - 1].weight : null;
+    const defW = lastLoggedWeight != null ? lastLoggedWeight : (e.targetWeight != null ? e.targetWeight : '');
     inputHtml = `<div class="set-input" data-ei="${ei}">
       <div class="set-input-title">Seria ${nextSet}/${e.targetSets}</div>
       <div class="si-row">
@@ -2114,22 +2166,39 @@ function renderExerciseCard(e, ei) {
     </div>`;
   }
 
-  return `<div class="ex-card ${stCls} ${e.skipped ? 'ex-paused' : ''}">
-    <div class="ex-head">
-      <div class="ex-name">${e.order}. ${esc(d.name)} ${done ? '✅' : ''}</div>
-      <div class="ex-badges">${exBadges(e.ex)}</div>
+  // Linia podglądu — widoczna ZAWSZE (także gdy karta zwinięta), więc zwinięte
+  // ćwiczenie dalej pokazuje przy jednym spojrzeniu, co się z nim dzieje.
+  let summaryLine;
+  if (e.skipped) {
+    summaryLine = 'Pominięte';
+  } else if (done) {
+    const last = e.sets[e.sets.length - 1];
+    summaryLine = `${e.sets.length}/${e.targetSets} serii · ostatnia ${last.reps}×${last.weight != null ? fmtKg(last.weight) : 'BW'} @RPE${last.rpe ?? '—'}`;
+  } else {
+    summaryLine = `${e.sets.length}/${e.targetSets} serii · cel ${e.targetSets}×${e.targetReps} · ${e.targetWeight != null ? fmtKg(e.targetWeight) : (e.targetNote || 'wg RPE')}`;
+  }
+
+  return `<details class="ex-card ${stCls} ${e.skipped ? 'ex-paused' : ''} ${doneExtra}" ${isCurrent ? 'open' : ''}>
+    <summary>
+      <div class="ex-head">
+        <div class="ex-name">${e.order}. ${esc(d.name)} ${done ? '✅' : ''}</div>
+        <div class="ex-badges">${exBadges(e.ex)}</div>
+      </div>
+      <div class="ex-summary-line">${esc(summaryLine)}</div>
+    </summary>
+    <div class="ex-body">
+      ${paused && !e.skipped ? `<div class="paused-line">⚠️ To ćwiczenie jest wstrzymane (ból) do ${fmtDate(paused)}!</div>` : ''}
+      <div class="ex-targets">
+        <span class="tgt-main">${e.targetSets} × ${esc(e.targetReps)}</span>
+        <span class="tgt-weight">${e.targetWeight != null ? fmtKg(e.targetWeight) : esc(e.targetNote || 'wg RPE')}</span>
+      </div>
+      <div class="ex-sub">tempo ${esc(e.tempo)} · przerwa ${esc(e.restLabel)} · RPE cel ${e.rpeTarget}${e.suggestReason ? ' · ' + esc(e.suggestReason) : ''}</div>
+      ${d.straps ? `<div class="straps-note">🔒 Użyj pasków (lifting straps) — zero obciążonego chwytu.</div>` : ''}
+      ${setsHtml}
+      ${inputHtml}
+      ${!done ? `<button class="link-btn skip-link" data-skip-ei="${ei}">${e.skipped ? '↩ Przywróć ćwiczenie' : 'Pomiń ćwiczenie'}</button>` : ''}
     </div>
-    ${paused && !e.skipped ? `<div class="paused-line">⚠️ To ćwiczenie jest wstrzymane (ból) do ${fmtDate(paused)}!</div>` : ''}
-    <div class="ex-targets">
-      <span class="tgt-main">${e.targetSets} × ${esc(e.targetReps)}</span>
-      <span class="tgt-weight">${e.targetWeight != null ? fmtKg(e.targetWeight) : esc(e.targetNote || 'wg RPE')}</span>
-    </div>
-    <div class="ex-sub">tempo ${esc(e.tempo)} · przerwa ${esc(e.restLabel)} · RPE cel ${e.rpeTarget}${e.suggestReason ? ' · ' + esc(e.suggestReason) : ''}</div>
-    ${d.straps ? `<div class="straps-note">🔒 Użyj pasków (lifting straps) — zero obciążonego chwytu.</div>` : ''}
-    ${setsHtml}
-    ${inputHtml}
-    ${!done ? `<button class="link-btn skip-link" data-skip-ei="${ei}">${e.skipped ? '↩ Przywróć ćwiczenie' : 'Pomiń ćwiczenie'}</button>` : ''}
-  </div>`;
+  </details>`;
 }
 
 function logSet(ei) {
@@ -2617,6 +2686,19 @@ function phaseGateStatus() {
   ];
   return { checks, allOk: checks.every(c => c.ok) };
 }
+
+// Nie pozwól, żeby ekran się wygaszał, dopóki aplikacja jest otwarta.
+// Wake Lock jest automatycznie zwalniany przez przeglądarkę, gdy karta
+// staje się niewidoczna — trzeba go poprosić ponownie po powrocie.
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* odmówione/niedostępne — po cichu ignoruj */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+});
+requestWakeLock();
 
 document.getElementById('app-ver').textContent = 'ver. ' + APP_VERSION;
 rebuildCustomEx();
