@@ -469,7 +469,7 @@ body {
 'use strict';
 
 // Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
-const APP_VERSION = '007';
+const APP_VERSION = '008';
 
 // ============================================================
 // DANE PLANU — powrót do treningów po epicondylitis lateralis
@@ -837,6 +837,7 @@ function parseTrainerPlan(obj) {
   if (!obj || typeof obj !== 'object') { err('Plik nie jest poprawnym JSON-em.'); return { errors }; }
   const info = obj.plan_info || {};
   const treningi = obj.treningi;
+  const techDetails = obj._techDetails || {}; // opisy techniki + wideo z sekcji "### Nazwa [id]" (tylko z Markdown)
   if (!Array.isArray(treningi) || !treningi.length) { err('Brak listy "treningi" albo jest pusta.'); return { errors }; }
 
   const workouts = [];
@@ -870,8 +871,10 @@ function parseTrainerPlan(obj) {
           : (e === 'false' || e === 'nie') ? false : null;
         if (elbow === null) { err(`${cw}: "bezpieczne_dla_lokcia" musi być true / false / "ostrzezenie".`); elbow = 'warn'; }
       }
+      const exId = c.id ? slugify(c.id) : slugify(c.nazwa);
+      const td = techDetails[exId];
       return {
-        ex: c.id ? slugify(c.id) : slugify(c.nazwa),
+        ex: exId,
         name: String(c.nazwa),
         sets: sets || 3,
         reps: String(c.powtorzenia),
@@ -885,7 +888,8 @@ function parseTrainerPlan(obj) {
         straps: !!c.paski,
         optional: !!c.opcjonalne,
         hint: c.wskazowka ? String(c.wskazowka) : null,
-        video: c.video ? String(c.video) : null,
+        desc: (td && td.desc) || null,
+        video: (c.video ? String(c.video) : null) || (td && td.video) || null,
         warnings: Array.isArray(c.uwagi) ? c.uwagi.map(String) : (c.uwagi ? [String(c.uwagi)] : [])
       };
     }).filter(Boolean);
@@ -916,7 +920,9 @@ function parseTrainerPlan(obj) {
         opis: info.opis ? String(info.opis) : null,
         uwagi: info.uwagi_ogolne ? String(info.uwagi_ogolne) : null
       },
-      workouts
+      workouts,
+      rehab: Array.isArray(obj.rehab) && obj.rehab.length ? obj.rehab : null,
+      techDetails: Object.keys(techDetails).length ? techDetails : null
     },
     errors: []
   };
@@ -931,12 +937,30 @@ function normDate(s) {
   return null;
 }
 
+// Wyciąga PIERWSZĄ liczbę z tekstu (np. z zakresu "7-8" bierze 7, z "RPE 6-7" bierze 6) —
+// spójne z tym, jak parseFloat naturalnie obcina zakresy w komórkach tabeli.
+function firstNumber(s) {
+  const m = String(s).match(/(\d+(?:[.,]\d+)?)/);
+  return m ? parseFloat(m[1].replace(',', '.')) : NaN;
+}
+
 // Zamienia plan w Markdown (nagłówki ## + tabele) na strukturę jak z pliku JSON.
+// Sekcje "## ..." bez daty na początku (np. "## Jak czytać ten plan", "## TYDZIEŃ 1",
+// "## Opisy techniki") to dozwolona dokumentacja/appendix — są po cichu pomijane,
+// NIE traktowane jako błąd. Wyjątek: sekcja z "rehab" w nazwie (np.
+// "## Rehabilitacja łokcia") jest rozpoznawana jako codzienny protokół rehab.
+// Podsekcje "### Nazwa [id]" (opis techniki + link "Wideo: [..](url)") są zbierane
+// i doklejane do pasującego ćwiczenia (po [id]) albo — w sekcji rehab — stają się
+// pozycjami codziennej checklisty w zakładce Rehab.
 function parseTrainerPlanMd(text) {
   const errors = [];
   const info = {};
   const treningi = [];
-  let cur = null;
+  const techDetails = {}; // id -> { name, desc, video }
+  const rehabIds = []; // kolejność pozycji rehab z sekcji "## ...rehab..."
+  let cur = null;       // aktualny trening (mode === 'training')
+  let mode = null;      // 'training' | 'rehab' | 'reference' | null
+  let techId = null;    // aktualne "### Nazwa [id]" — dokąd dopisywać opis/wideo
   const lines = text.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i++) {
@@ -947,18 +971,37 @@ function parseTrainerPlanMd(text) {
       info.nazwa = line.slice(2).replace(/^Plan\s*:\s*/i, '').trim();
       continue;
     }
+    if (line.startsWith('### ')) {
+      const raw = line.slice(4).trim();
+      const m = raw.match(/^(?:\d+\.\s*)?(.+?)\s*\[([^\]]+)\]\s*$/);
+      if (m) {
+        techId = m[2];
+        if (!techDetails[techId]) techDetails[techId] = { name: m[1], desc: '', video: null };
+        if (mode === 'rehab' && !rehabIds.includes(techId)) rehabIds.push(techId);
+      } else {
+        techId = null; // podsekcja bez [id] (np. "Dodatkowe zalecenia") — pomijamy jej treść
+      }
+      continue;
+    }
     if (line.startsWith('## ')) {
       const segs = line.slice(3).split('|').map(s => s.trim());
       const date = normDate(segs[0]);
-      if (!date) errors.push(`Linia ${i + 1}: nagłówek treningu musi zaczynać się datą (RRRR-MM-DD albo DD.MM.RRRR), jest: "${segs[0]}".`);
-      cur = { data: date || segs[0], nazwa: segs[1] || 'Trening', cwiczenia: [] };
-      for (const s of segs.slice(2)) {
-        const t = s.toLowerCase();
-        const num = parseFloat(s.replace(',', '.').replace(/[^\d.,]/g, ''));
-        if (t.includes('tydz') && !isNaN(num)) cur.tydzien = num;
-        else if (t.includes('rpe') && !isNaN(num)) cur.rpe_cel = num;
+      techId = null;
+      if (date) {
+        mode = 'training';
+        cur = { data: date, nazwa: segs[1] || 'Trening', cwiczenia: [] };
+        for (const s of segs.slice(2)) {
+          const t = s.toLowerCase();
+          const num = firstNumber(s);
+          if (t.includes('tydz') && !isNaN(num)) cur.tydzien = num;
+          else if (t.includes('rpe') && !isNaN(num)) cur.rpe_cel = num;
+        }
+        treningi.push(cur);
+      } else if (/rehab/i.test(segs[0])) {
+        mode = 'rehab'; cur = null;
+      } else {
+        mode = 'reference'; cur = null; // dokumentacja/appendix — pomijana bez błędu
       }
-      treningi.push(cur);
       continue;
     }
     const kv = line.match(/^(Trener|Zawodnik|Opis|Uwagi|Rozgrzewka)\s*:\s*(.+)$/i);
@@ -980,6 +1023,7 @@ function parseTrainerPlanMd(text) {
       if (!cells.length || cells.every(c => /^:?-{2,}:?$/.test(c))) continue; // separator |---|
       const first = cells[0].toLowerCase();
       if (first.startsWith('ćwicz') || first.startsWith('cwicz')) continue;   // wiersz nagłówka
+      if (mode !== 'training') continue; // tabela w sekcji dokumentacyjnej/rehab — pomijana (rehab opisany przez ###, nie tabelę)
       if (!cur) { errors.push(`Linia ${i + 1}: tabela ćwiczeń przed nagłówkiem treningu (##).`); continue; }
       if (cells.length < 6) {
         errors.push(`Linia ${i + 1}: wiersz ma ${cells.length} kolumn, potrzeba 8: Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka.`);
@@ -993,7 +1037,13 @@ function parseTrainerPlanMd(text) {
       if (idm) { id = idm[1]; name = nameCell.slice(0, idm.index).trim(); }
 
       const sm = sxr.replace('×', 'x').match(/^\s*(\d+)\s*x\s*(.+)$/i);
-      if (!sm) errors.push(`Linia ${i + 1} (${name}): Serie×Powt. musi mieć format "3x10-12", jest: "${sxr}".`);
+      if (!sm) {
+        if (/rozgrzew|warmup/i.test(name) || /rozgrzew|warmup/i.test(id || '')) {
+          errors.push(`Linia ${i + 1} (${name}): rozgrzewka nie powinna być wierszem w tabeli ćwiczeń — usuń ten wiersz i dodaj zamiast niego linię "Rozgrzewka: krok 1; krok 2; ..." pod nagłówkiem treningu (albo na górze pliku dla wszystkich treningów). Patrz PLAN-TRENERA-INSTRUKCJA.md.`);
+        } else {
+          errors.push(`Linia ${i + 1} (${name}): Serie×Powt. musi mieć format "3x10-12", jest: "${sxr}".`);
+        }
+      }
 
       let ciezar_kg = null, ciezar_opis;
       const wNorm = wCell.replace(',', '.').replace(/\s*kg\s*$/i, '').trim();
@@ -1007,7 +1057,7 @@ function parseTrainerPlanMd(text) {
       const przerwa_s = restNums ? +restNums[restNums.length - 1] : 0;
       const przerwa_opis = /^\d+\s*s?$/.test(restCell) ? undefined : restCell;
 
-      const rpe = empty(rpeCell) ? undefined : parseFloat(rpeCell.replace(',', '.'));
+      const rpe = empty(rpeCell) ? undefined : firstNumber(rpeCell);
       const flags = flagCell.toLowerCase();
       let lok = true;
       if (/\bnie\b|wyklucz/.test(flags)) lok = false;
@@ -1020,7 +1070,7 @@ function parseTrainerPlanMd(text) {
         ciezar_kg, ciezar_opis,
         tempo: empty(tempoCell) ? undefined : tempoCell,
         przerwa_s, przerwa_opis,
-        rpe_cel: rpe,
+        rpe_cel: (rpe == null || isNaN(rpe)) ? undefined : rpe,
         bezpieczne_dla_lokcia: lok,
         paski: /pask/.test(flags),
         opcjonalne: /opcjo/.test(flags),
@@ -1029,9 +1079,30 @@ function parseTrainerPlanMd(text) {
       });
       continue;
     }
+    // Zwykły akapit / link "Wideo: [tekst](url)" wewnątrz "### Nazwa [id]" — dopisz do opisu.
+    if (techId) {
+      const videoM = line.match(/^Wideo:\s*.*?\((https?:\/\/[^\s)]+)\)/i) || line.match(/^Wideo:\s*(https?:\/\/\S+)/i);
+      if (videoM) {
+        techDetails[techId].video = techDetails[techId].video || videoM[1];
+      } else if (!line.startsWith('#') && !line.startsWith('**Kiedy**')) {
+        techDetails[techId].desc = (techDetails[techId].desc ? techDetails[techId].desc + ' ' : '') + line;
+      } else if (line.startsWith('**Kiedy**')) {
+        techDetails[techId].desc = (techDetails[techId].desc ? techDetails[techId].desc + ' ' : '') + line.replace(/\*\*/g, '');
+      }
+    }
   }
   if (!treningi.length) errors.push('Nie znaleziono żadnego treningu. Każdy trening zaczyna się linią "## RRRR-MM-DD | nazwa treningu".');
-  return { obj: { plan_info: info, treningi }, errors };
+
+  const rehab = rehabIds.map(id => ({
+    id, name: (techDetails[id] && techDetails[id].name) || id,
+    desc: (techDetails[id] && techDetails[id].desc) || '',
+    video: (techDetails[id] && techDetails[id].video) || null
+  }));
+
+  const obj = { plan_info: info, treningi };
+  obj._techDetails = techDetails;
+  if (rehab.length) obj.rehab = rehab;
+  return { obj, errors };
 }
 
 // Wczytuje plan z tekstu — Markdown (zalecany) albo JSON (też akceptowany).
@@ -1373,10 +1444,24 @@ function rebuildCustomEx() {
           elbowSafe: it.elbowSafe,
           straps: it.straps,
           hint: it.hint || null,
+          desc: it.desc || null,
           video: it.video || null,
           warnings: it.warnings && it.warnings.length ? it.warnings : null
         };
       }
+    }
+  }
+  if (S.customPlan.rehab) {
+    for (const r of S.customPlan.rehab) {
+      if (!CUSTOM_EX[r.id]) CUSTOM_EX[r.id] = { name: r.name, desc: r.desc || null, video: r.video || null };
+    }
+  }
+  // Opisy z appendixu ("### Nazwa [id]"), które nie są przypisane do żadnego ćwiczenia
+  // w tabelach (np. rozgrzewka opisana osobno, nie jako wiersz-ćwiczenie) — mimo to
+  // przydatne, np. jako "pełny opis" pod kartą rozgrzewki.
+  if (S.customPlan.techDetails) {
+    for (const [id, td] of Object.entries(S.customPlan.techDetails)) {
+      if (!CUSTOM_EX[id]) CUSTOM_EX[id] = { name: td.name, desc: td.desc || null, video: td.video || null };
     }
   }
 }
@@ -1668,10 +1753,17 @@ function updateTopbar() {
   document.getElementById('topbar-meta').textContent =
     `Faza ${p.id} · Tydzień ${S.plan.week}/${p.weeks} · ${p.rpeLabel[S.plan.week] || ''}`;
 }
+// Lista rehab łokcia — z pliku trenera, jeśli go dostarczył (sekcja "## ...rehab..." w Markdown),
+// inaczej wbudowany domyślny protokół.
+function rehabList() {
+  return (S.customPlan && S.customPlan.rehab && S.customPlan.rehab.length) ? S.customPlan.rehab : PLAN_DATA.rehab;
+}
+function rehabAllDone(entry) {
+  return !!entry && rehabList().every(item => entry[item.id]);
+}
 function updateRehabBadge() {
   const r = S.rehab[todayISO()];
-  const done = r && r.eccentric && r.stretching;
-  document.getElementById('rehab-badge').classList.toggle('hidden', !!done);
+  document.getElementById('rehab-badge').classList.toggle('hidden', rehabAllDone(r));
 }
 
 function exBadges(exId, item) {
@@ -1748,8 +1840,9 @@ function warmupCard(steps, interactive) {
     ? `<label class="warmup-step ${s.warmupDone && s.warmupDone[i] ? 'done' : ''}">
          <input type="checkbox" data-warmup-i="${i}" ${s.warmupDone && s.warmupDone[i] ? 'checked' : ''}><span>${esc(step)}</span></label>`
     : `<div class="warmup-step"><span>• ${esc(step)}</span></div>`).join('');
+  const detail = CUSTOM_EX['rozgrzewka'];
   return `<details class="card warmup-card" ${interactive ? 'open' : ''}>
-    <summary>🔥 Rozgrzewka (5–10 min, zawsze przed treningiem)</summary>${rows}</details>`;
+    <summary>🔥 Rozgrzewka (5–10 min, zawsze przed treningiem)${detail ? ` <button class="rpe-q" data-hint="rozgrzewka">pełny opis</button>` : ''}</summary>${rows}</details>`;
 }
 function bindWarmup() {
   view.querySelectorAll('[data-warmup-i]').forEach(c => c.addEventListener('change', () => {
@@ -2264,28 +2357,30 @@ function weightStagnation() {
 
 // ---------------- WIDOK: Rehab ----------------
 function rehabFor(date) {
-  if (!S.rehab[date]) S.rehab[date] = { eccentric: false, stretching: false, ice: false, pain: null };
+  if (!S.rehab[date]) S.rehab[date] = { pain: null };
   return S.rehab[date];
 }
 function renderRehab() {
   const today = todayISO();
   const r = rehabFor(today);
+  const list = rehabList();
+  const fromTrainer = !!(S.customPlan && S.customPlan.rehab && S.customPlan.rehab.length);
   let streak = 0;
   for (let i = 0; ; i++) {
     const d = new Date(); d.setDate(d.getDate() - i);
     const x = S.rehab[todayISO(d)];
-    if (x && x.eccentric && x.stretching) streak++;
+    if (rehabAllDone(x)) streak++;
     else if (i === 0) continue;
     else break;
   }
 
   let html = `<div class="card">
     <h3>💪 Rehab łokcia — dziś ${streak > 1 ? `· 🔥 seria ${streak} dni` : ''}</h3>
-    <p class="muted">Codziennie, niezależnie od dni treningowych. Epicondylitis lateralis — priorytet: ekscentryka + rozciąganie.</p>
-    ${PLAN_DATA.rehab.map(item => `
+    <p class="muted">Codziennie, niezależnie od dni treningowych.${fromTrainer ? ' Protokół od trenera/fizjoterapeuty.' : ' Epicondylitis lateralis — priorytet: ekscentryka + rozciąganie.'}</p>
+    ${list.map(item => `
       <label class="check rehab-check ${r[item.id] ? 'on' : ''}">
         <input type="checkbox" data-rehab="${item.id}" ${r[item.id] ? 'checked' : ''}>
-        <span><b>${esc(item.name)}</b><br><span class="muted">${esc(item.desc)}</span></span>
+        <span><b>${esc(item.name)}</b>${item.video ? ` <button class="rpe-q" data-hint="${esc(item.id)}">🎥</button>` : ''}<br><span class="muted">${esc(item.desc)}</span></span>
       </label>`).join('')}
     <div class="si-field"><label>Ogólny ból łokcia dziś (0–10)</label>
       <div class="pain-chips">${[0,1,2,3,4,5,6,7,8,9,10].map(p =>
@@ -2297,8 +2392,7 @@ function renderRehab() {
 
   html += `<div class="card"><h3>Ostatnie 7 dni</h3><div class="rehab-week">${[6,5,4,3,2,1,0].map(i => {
     const d = new Date(); d.setDate(d.getDate() - i);
-    const x = S.rehab[todayISO(d)];
-    const ok = x && x.eccentric && x.stretching;
+    const ok = rehabAllDone(S.rehab[todayISO(d)]);
     return `<div class="rw-day ${ok ? 'ok' : ''}"><div>${['Nd','Pn','Wt','Śr','Cz','Pt','So'][d.getDay()]}</div><div>${ok ? '✓' : '·'}</div></div>`;
   }).join('')}</div></div>`;
 

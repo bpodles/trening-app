@@ -65,17 +65,78 @@ Nagłówek `##` to segmenty rozdzielone `|`:
 | **Wskazówka** | Krótka wskazówka techniczna widoczna na karcie ćwiczenia, `-` = brak |
 | **Video** (opcjonalna 9. kolumna) | Link do YouTube pokazujący technikę — pojawi się jako przycisk "Zobacz na YouTube" w karcie ćwiczenia. Możesz pominąć całą kolumnę. Uwaga: jeśli użyjesz identyfikatorów z wbudowanej bazy (`leg_press`, `hip_thrust`, `chest_press`, `deadlift_straps`...), ćwiczenie automatycznie dostanie opis techniki i link video z aplikacji |
 
-### Rozgrzewka (opcjonalnie)
+### Rozgrzewka (opcjonalnie) — ⚠️ WAŻNE, częsty błąd
 
-Linia `Rozgrzewka:` z krokami rozdzielonymi średnikiem — na górze pliku (dla wszystkich
+**Rozgrzewka nigdy nie jest wierszem w tabeli ćwiczeń.** Ma osobną, dedykowaną linię
+`Rozgrzewka:` z krokami rozdzielonymi średnikiem — na górze pliku (dla wszystkich
 treningów) albo pod nagłówkiem `##` konkretnego treningu (nadpisuje ogólną):
 
 ```markdown
 Rozgrzewka: 5 min rower; krążenia ramion 2 min; stretching przedramion 2x30 s
 ```
 
-Jeśli nie podasz żadnej, aplikacja pokaże swoją domyślną rozgrzewkę (zawiera
-stretching wyprostników przedramienia pod rehab łokcia).
+To pokazuje się w aplikacji jako osobna, odhaczalna karta na górze treningu — **nie**
+dodawaj wiersza typu `| Rozgrzewka [rozgrzewka] | 8-10 min | ... |` do tabeli ćwiczeń,
+bo tabela ćwiczeń wymaga formatu `3x10-12`, a "8-10 min" tego formatu nie spełnia
+(aplikacja to wyłapie i poprosi o poprawkę). Jeśli chcesz opisać rozgrzewkę bardzo
+szczegółowo (kilka etapów, linki wideo) — zrób to w sekcji dodatkowej opisanej niżej
+("### Rozgrzewka ogólna [rozgrzewka]"), a w linii `Rozgrzewka:` daj tylko skróconą
+listę kroków. Jeśli nie podasz żadnej, aplikacja pokaże swoją domyślną rozgrzewkę
+(zawiera stretching wyprostników przedramienia pod rehab łokcia).
+
+### Dodatkowe sekcje — wyjaśnienia, opisy technik, wideo (opcjonalnie)
+
+Możesz dopisać do pliku dowolne sekcje `## ...` **bez daty na początku** — np.
+"## Jak czytać ten plan", "## Opisy techniki i materiały wideo". Aplikacja
+rozpoznaje, że to nie jest trening (nie zaczyna się datą) i **bezpiecznie je
+pomija** — nie zgłasza błędu, po prostu ich nie pokazuje w apce. Możesz tam pisać
+cokolwiek — tabele, wyjaśnienia RPE, wskazówki ogólne — Bartek/Łukasz to przeczyta
+otwierając sam plik, ale aplikacja tego nie potrzebuje.
+
+**Wyjątek, który JEST wykorzystywany przez aplikację:** podsekcje w formacie
+`### Nazwa ćwiczenia [id]` (trzy krzyżyki, ten sam `[id]` co w tabeli). Wszystko,
+co napiszesz pod taką podsekcją (akapit opisu + ewentualnie linia
+`Wideo: [tytuł](https://...)`), aplikacja **doczepia automatycznie** do ćwiczenia
+o tym `[id]` — pokaże się jako pełny opis + przycisk „Zobacz na YouTube" w karcie
+ćwiczenia. Dzięki temu opis piszesz **raz**, a każdy wiersz tabeli z tym samym `[id]`
+(w dowolnym tygodniu) go dziedziczy — nie musisz powtarzać wskazówek w każdej kolumnie
+Wskazówka.
+
+```markdown
+## Opisy techniki i materiały wideo
+
+### Leg press [leg_press]
+Siadasz w maszynie, stopy na platformie na szerokość barków... (dowolnie długi opis)
+Wideo: [How to do a Leg Press](https://www.youtube.com/watch?v=...)
+```
+
+### Rehab łokcia — codzienna checklista (opcjonalnie)
+
+Jeśli fizjoterapeuta zmienia protokół rehabilitacji, możesz go wpisać do pliku —
+**zastąpi wtedy wbudowaną checklistę** w zakładce Rehab (i będzie tak samo odhaczalny
+codziennie, ze streakiem dni z rzędu). Format: nagłówek `##` zawierający słowo
+"rehab" (w dowolnym miejscu nazwy), a pod nim podsekcje `### N. Nazwa [id]` — dokładnie
+ten sam mechanizm co opisy technik wyżej, plus opcjonalna linia `**Kiedy**: ...`
+(częstotliwość, pokaże się razem z opisem):
+
+```markdown
+## Rehabilitacja łokcia — protokół fizjoterapeuty
+
+### 1. Rozciąganie zginaczy nadgarstka [rehab_zginacze]
+Ramię wyprostowane przed sobą, nadgarstek zgięty grzbietowo... Trzymaj 20-30s.
+**Kiedy**: kilka razy dziennie.
+Wideo: [Wrist Flexor Stretch](https://www.youtube.com/watch?v=...)
+
+### 2. Rozciąganie wyprostników nadgarstka [rehab_wyprostniki]
+...
+
+### 3. Rotacja tułowia (open book stretch) [rehab_rotacja_tulowia]
+...
+```
+
+Każda podsekcja `### N. Nazwa [id]` w tej sekcji staje się jedną pozycją na
+codziennej liście do odhaczenia. Możesz wpisać dowolną liczbę pozycji (nie musi
+być akurat 3).
 
 ## Co aplikacja robi sama (musisz o tym wiedzieć)
 
@@ -97,9 +158,17 @@ neutralny i maszyny dla górnej części ciała.
 
 ## Częste błędy
 
-- Brak daty na początku nagłówka `##` — aplikacja powie, w której linii.
+- **Rozgrzewka jako wiersz tabeli** (np. `| Rozgrzewka [rozgrzewka] | 8-10 min | ... |`) —
+  format "8-10 min" nie pasuje do wymaganego "3x10-12". Użyj linii `Rozgrzewka:` (patrz wyżej).
+- **Serie×Powt. bez „x"** — np. "1 seria do odmowy" albo "1 seria max". Musi być
+  `1x do odmowy` / `1x max` — liczba, litera „x", potem opis.
+- Brak daty na początku nagłówka `##` treningu — jeśli to nie jest trening tylko
+  dokumentacja/wyjaśnienie, to OK, aplikacja go pominie bez błędu (patrz sekcja
+  "Dodatkowe sekcje" wyżej). Błąd pojawi się tylko, jeśli sekcja zawiera słowo
+  "rehab" (wtedy aplikacja oczekuje formatu rehab-checklisty) — w innym wypadku
+  brak daty nigdy nie blokuje importu.
 - Usunięcie linii z kreskami `|---|---|...` pod nagłówkiem tabeli — zostaw ją.
-- Za mało kolumn w wierszu (musi być 8, puste wypełniaj `-`).
+- Za mało kolumn w wierszu (musi być min. 6, docelowo 8-9, puste wypełniaj `-`).
 - Inna liczba `|` niż w pozostałych wierszach (każdy wiersz zaczyna i kończy się `|`).
 
 Aplikacja waliduje plik przy wczytaniu i wypisuje po polsku, co i w której linii
