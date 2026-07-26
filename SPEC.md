@@ -773,6 +773,58 @@ saveFile(nazwa, tekst, mime):
 Używane do: eksportu historii (.txt), pełnego backupu (.json), pobrania
 szablonu pliku dla trenera (.md).
 
+### 4.25a. Blokada wygaszacza ekranu (Wake Lock)
+
+- **Zachowanie:** przy starcie aplikacji i za każdym razem, gdy karta wraca
+  do stanu widocznego (`visibilitychange` → `visible`), aplikacja prosi
+  przeglądarkę o `navigator.wakeLock.request('screen')`. Ekran telefonu nie
+  gaśnie samoczynnie, dopóki aplikacja jest na wierzchu. Wake Lock jest
+  **automatycznie zwalniany przez przeglądarkę**, gdy karta staje się
+  niewidoczna (przełączenie aplikacji, zablokowanie telefonu) — stąd
+  konieczność ponownej prośby przy powrocie.
+- Brak wsparcia przeglądarki albo odmowa uprawnienia → po cichu ignorowane
+  (feature-detection przez `'wakeLock' in navigator`, całość w `try/catch`).
+  Nie jest to stan błędu wymagający komunikatu do użytkownika.
+
+### 4.9a. Domyślny ciężar kolejnej serii (aktualizacja do 4.9)
+
+Pole "Ciężar" formularza logowania serii domyślnie pokazuje: **ciężar
+zapisany w OSTATNIEJ już zalogowanej serii tego samego ćwiczenia w bieżącej
+sesji**, jeśli taka istnieje — dopiero w jej braku (pierwsza seria
+ćwiczenia) domyślną wartością jest sugestia silnika progresji
+(`targetWeight`). To pozwala szybko powtórzyć ten sam ciężar w kolejnych
+seriach jednym tapnięciem "Zapisz", zamiast wracać za każdym razem do
+oryginalnej sugestii.
+
+### 4.9b. Zwijane karty ćwiczeń w aktywnej sesji (aktualizacja do 4.8/4.9)
+
+Karty ćwiczeń w widoku aktywnej sesji to znaczniki `<details>`/`<summary>`,
+nie zwykłe `<div>`. Sterowanie stanem rozwinięcia jest w pełni **wyliczane
+przy każdym renderze** (nie ma osobnego stanu "ręcznie otwarte/zamknięte"
+trzymanego w danych):
+
+- **Bieżące ćwiczenie** = pierwsze w kolejności, które nie jest pominięte
+  (`skipped`) i nie ma jeszcze skompletowanych wszystkich docelowych serii —
+  renderowane z atrybutem `open` (rozwinięte).
+- **Wszystkie pozostałe** (i wcześniejsze-już-wykonane, i późniejsze-jeszcze-
+  nierozpoczęte) renderują się zwinięte, ale `<summary>` ZAWSZE pokazuje
+  jednowierszowy podgląd stanu — nawet zwinięte, ćwiczenie jest czytelne
+  "jednym spojrzeniem":
+  - wykonane: `"{X}/{Y} serii · ostatnia {powt}×{ciężar} @RPE{rpe}"` + dodatkowa
+    klasa CSS przygaszająca kartę (`ex-done`, opacity ~0.82) — wizualnie
+    odróżnialne od jeszcze niewykonanych.
+  - pominięte: `"Pominięte"`.
+  - jeszcze nierozpoczęte/w trakcie: `"{X}/{Y} serii · cel {sets}×{reps} ·
+    {ciężar lub notatka}"`.
+- Użytkownik MOŻE ręcznie rozwinąć/zwinąć dowolną kartę tapnięciem
+  `<summary>` (natywne zachowanie `<details>`, zero dodatkowego kodu) — ale
+  ten ręczny stan **nie przetrwa** kolejnego pełnego re-renderu (np. po
+  zalogowaniu serii gdziekolwiek w sesji), który zawsze na nowo wylicza,
+  które ćwiczenie jest "bieżące".
+  Wyjątek: kliknięcie plakietek (💡/🎥/📋 — otwierających modal z opisem)
+  wewnątrz `<summary>` woła `event.preventDefault()`, żeby nie
+  rozwijało/zwijało karty przy okazji otwierania modala.
+
 ### 4.25. Pobranie szablonu pliku dla trenera
 
 - Przycisk w karcie planu trenera generuje i zapisuje (przez 4.24) gotowy,
@@ -1198,10 +1250,20 @@ jakimkolwiek serwerem aplikacji.
    samej aplikacji, i nie powinno się go dodawać bez wyraźnej prośby, bo
    zmieniłoby to fundamentalny model przechowywania danych.
 
-2. **Timer przerwy jest czysto wizualny — brak dźwięku, wibracji,
-   powiadomień.** Użytkownik wprost tego zażądał po tym, jak wcześniejsza
-   wersja (jako natywna PWA) miała te funkcje. Nie dodawać ich z powrotem
-   bez pytania.
+2. **Timer przerwy: wizualny + dźwiękowy (3 piknięcia na koniec), ale wciąż
+   BEZ wibracji i BEZ powiadomień systemowych.** Wcześniej był całkowicie
+   bezdźwięczny (świadome życzenie użytkownika po tym, jak wcześniejsza
+   natywna wersja PWA miała pełny zestaw: dźwięk+wibrację+powiadomienia) —
+   potem użytkownik jawnie poprosił o dodanie samego dźwięku (3 piknięcia
+   przez Web Audio API). `AudioContext` jest tworzony leniwie, ale
+   WYŁĄCZNIE wewnątrz `startTimer()` (wywoływanego zawsze z prawdziwego
+   handlera kliknięcia) — to jest wymagane, żeby ominąć politykę
+   autoplay na iOS Safari: kontekst dźwiękowy musi powstać/wznowić się w
+   ramach prawdziwego gestu użytkownika, nawet jeśli sam beep odpala się
+   później, asynchronicznie po zakończeniu odliczania. Panel przerwy jest
+   czerwony (`--danger`) w trakcie odliczania, zielony (`--good`) po
+   zakończeniu. Nie dodawać wibracji/powiadomień z powrotem bez pytania —
+   tych dwóch user nadal nie chce.
 
 3. **Plan trenera: ciężar jest wiążący, nie podbijany automatycznie w
    górę** (w przeciwieństwie do planu wbudowanego, który nigdy nie każe się
