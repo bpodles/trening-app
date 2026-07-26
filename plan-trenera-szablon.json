@@ -1,0 +1,136 @@
+{
+  "plan_info": {
+    "trener": "Pedro",
+    "zawodnik": "Bartłomiej",
+    "nazwa": "Blok treningowy — nazwa/miesiąc",
+    "opis": "Cel bloku, np. hipertrofia z ochroną łokcia.",
+    "uwagi_ogolne": "Uwagi widoczne w aplikacji, np. rozgrzewka 10 min przed każdym treningiem."
+  },
+  "treningi": [
+    {
+      "data": "2026-08-03",
+      "nazwa": "A — nogi + plecy",
+      "tydzien": 1,
+      "rpe_cel": 6,
+      "uwagi": "Opcjonalna notatka do całego treningu.",
+      "cwiczenia": [
+        {
+          "id": "leg_press",
+          "nazwa": "Leg press",
+          "serie": 3,
+          "powtorzenia": "10-12",
+          "ciezar_kg": 60,
+          "tempo": "3110",
+          "przerwa_s": 120,
+          "rpe_cel": 6,
+          "bezpieczne_dla_lokcia": true,
+          "paski": false,
+          "opcjonalne": false,
+          "wskazowka": "Pełny zakres, kontrola fazy opuszczania.",
+          "uwagi": ["3.02.2026: ból pod lewym żebrem — obserwować."]
+        },
+        {
+          "id": "wioslowanie_maszyna",
+          "nazwa": "Wiosłowanie siedząc, uchwyt neutralny",
+          "serie": 3,
+          "powtorzenia": "10",
+          "ciezar_kg": null,
+          "ciezar_opis": "RPE 6 — dobierz na maszynie",
+          "tempo": "3110",
+          "przerwa_s": 90,
+          "bezpieczne_dla_lokcia": "ostrzezenie",
+          "paski": true
+        },
+        {
+          "id": "hip_thrust",
+          "nazwa": "Hip thrust (sztanga, paski)",
+          "serie": 3,
+          "powtorzenia": "10",
+          "ciezar_kg": 50,
+          "tempo": "2111",
+          "przerwa_s": 120,
+          "paski": true
+        }
+      ]
+    },
+    {
+      "data": "2026-08-05",
+      "nazwa": "B — pierś + barki + core",
+      "tydzien": 1,
+      "rpe_cel": 6,
+      "cwiczenia": [
+        {
+          "id": "chest_press",
+          "nazwa": "Chest press (maszyna)",
+          "serie": 3,
+          "powtorzenia": "8-10",
+          "ciezar_kg": null,
+          "ciezar_opis": "RPE 6",
+          "tempo": "2110",
+          "przerwa_s": 120
+        },
+        {
+          "id": "shoulder_press",
+          "nazwa": "Shoulder press (maszyna)",
+          "serie": 3,
+          "powtorzenia": "8-10",
+          "ciezar_kg": null,
+          "ciezar_opis": "RPE 6",
+          "tempo": "2110",
+          "przerwa_s": 105
+        },
+        {
+          "id": "pallof_press",
+          "nazwa": "Pallof press",
+          "serie": 3,
+          "powtorzenia": "10/str.",
+          "ciezar_kg": 10,
+          "tempo": "2121",
+          "przerwa_s": 60
+        }
+      ]
+    },
+    {
+      "data": "2026-08-07",
+      "nazwa": "C — nogi (tył) + pchanie",
+      "tydzien": 1,
+      "rpe_cel": 6,
+      "cwiczenia": [
+        {
+          "id": "deadlift",
+          "nazwa": "Deadlift (lifting straps)",
+          "serie": 3,
+          "powtorzenia": "6",
+          "ciezar_kg": 50,
+          "tempo": "2110",
+          "przerwa_s": 150,
+          "paski": true,
+          "wskazowka": "Paski obowiązkowo — zero chwytu overhand bez zabezpieczenia."
+        },
+        {
+          "id": "chest_press",
+          "nazwa": "Chest press (maszyna)",
+          "serie": 3,
+          "powtorzenia": "10",
+          "ciezar_kg": null,
+          "ciezar_opis": "+5%",
+          "tempo": "2110",
+          "przerwa_s": 120
+        },
+        {
+          "id": "farmer_carry",
+          "nazwa": "Farmer carry (z paskami)",
+          "serie": 2,
+          "powtorzenia": "40 m",
+          "ciezar_kg": 15,
+          "ciezar_opis": "2x15 kg",
+          "tempo": "stabilny tułów",
+          "przerwa_s": 90,
+          "bezpieczne_dla_lokcia": "ostrzezenie",
+          "paski": true,
+          "opcjonalne": true
+        }
+      ]
+    }
+  ]
+}

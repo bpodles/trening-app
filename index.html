@@ -1,0 +1,2535 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f2efe8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Trening">
+<title>Trening — Powrót do siły</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+/* ============================================================
+   Design tokens — "iron & chalk": rubber gym flooring + chalk
+   dust neutrals, a burnt-iron accent, and plate-colour semantics
+   (green/amber/red are literally competition plate colours,
+   reused here for progression state: safe / caution / stop).
+   ============================================================ */
+:root {
+  --bg: #f2efe8;
+  --surface: #fbfaf6;
+  --surface-2: #eae6da;
+  --border: #ddd6c6;
+  --text: #201c15;
+  --text-muted: #6f6a5c;
+  --accent: #b6491f;
+  --accent-strong: #943915;
+  --accent-contrast: #fff8f0;
+  --accent-bg: #f5e1d2;
+  --good: #3f7a45;
+  --good-bg: #e2ecdf;
+  --warn: #93701c;
+  --warn-bg: #f1e7cc;
+  --danger: #a3332a;
+  --danger-bg: #f4dfda;
+  --shadow: 0 1px 2px rgba(32, 28, 21, 0.06), 0 8px 24px rgba(32, 28, 21, 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --surface: #1e2124;
+    --surface-2: #272b2f;
+    --border: #34383c;
+    --text: #f1efe8;
+    --text-muted: #9c988d;
+    --accent: #e2712c;
+    --accent-strong: #f08a44;
+    --accent-contrast: #17130d;
+    --accent-bg: #3a2718;
+    --good: #6bab70;
+    --good-bg: #1f2c20;
+    --warn: #d3ac48;
+    --warn-bg: #33291a;
+    --danger: #dc6a5c;
+    --danger-bg: #3a2320;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a; --surface: #1e2124; --surface-2: #272b2f; --border: #34383c;
+  --text: #f1efe8; --text-muted: #9c988d;
+  --accent: #e2712c; --accent-strong: #f08a44; --accent-contrast: #17130d; --accent-bg: #3a2718;
+  --good: #6bab70; --good-bg: #1f2c20;
+  --warn: #d3ac48; --warn-bg: #33291a;
+  --danger: #dc6a5c; --danger-bg: #3a2320;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="light"] {
+  --bg: #f2efe8; --surface: #fbfaf6; --surface-2: #eae6da; --border: #ddd6c6;
+  --text: #201c15; --text-muted: #6f6a5c;
+  --accent: #b6491f; --accent-strong: #943915; --accent-contrast: #fff8f0; --accent-bg: #f5e1d2;
+  --good: #3f7a45; --good-bg: #e2ecdf;
+  --warn: #93701c; --warn-bg: #f1e7cc;
+  --danger: #a3332a; --danger-bg: #f4dfda;
+  --shadow: 0 1px 2px rgba(32, 28, 21, 0.06), 0 8px 24px rgba(32, 28, 21, 0.07);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: calc(122px + env(safe-area-inset-bottom));
+  transition: background 0.15s ease, color 0.15s ease;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+:focus:not(:focus-visible) { outline: none; }
+.mono, .tgt-main, .tgt-weight, .rt-time, .session-progress, .set-done, .pbar span,
+.c-val, .c-date, .nu-field input, .week-ctl b, .set-input-title {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.hidden { display: none !important; }
+.muted { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ---------- topbar ---------- */
+#topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  border-bottom: 1px solid var(--border);
+}
+#topbar-title { font-weight: 800; font-size: 1.1rem; letter-spacing: 0.01em; }
+.app-ver { font-size: 0.62rem; font-weight: 600; color: var(--muted); vertical-align: middle; margin-left: 2px; }
+#topbar-meta { color: var(--text-muted); font-size: 0.78rem; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace; }
+
+/* ---------- main ---------- */
+#view { padding: 12px 12px 20px; max-width: 640px; margin: 0 auto; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.card h3 { margin: 0 0 8px; font-size: 1rem; text-wrap: balance; }
+.card.empty { text-align: center; color: var(--text-muted); padding: 32px 14px; }
+.sec-title {
+  margin: 18px 4px 8px; font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted);
+}
+
+.banner {
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  font-size: 0.9rem; line-height: 1.4; border: 1px solid transparent;
+}
+.banner-warn { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.banner-info { background: var(--accent-bg); color: var(--accent-strong); border-color: color-mix(in srgb, var(--accent) 30%, transparent); cursor: pointer; }
+
+/* ---------- day picker ---------- */
+.day-picker { display: flex; gap: 8px; margin: 4px 0 10px; }
+.day-btn {
+  flex: 1; padding: 14px 0; font-size: 1.3rem; font-weight: 800;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  background: var(--surface); color: var(--text-muted);
+  border: 1.5px solid var(--border); border-radius: 12px;
+  position: relative; cursor: pointer; transition: transform 0.1s ease;
+}
+.day-btn:active { transform: scale(0.97); }
+.day-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.day-sug {
+  position: absolute; top: 4px; right: 6px;
+  font-size: 0.55rem; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--good); font-family: -apple-system, sans-serif;
+}
+.day-btn.active .day-sug { color: var(--accent-contrast); opacity: 0.85; }
+.day-label { text-align: center; color: var(--text-muted); margin-bottom: 12px; font-size: 0.88rem; }
+
+/* ---------- exercise cards ---------- */
+/* Left rail encodes real state, not decoration: new = unevaluated,
+   ok = clear to progress, caution = hold steady, stop = paused/blocked. */
+.ex-card {
+  background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--text-muted);
+  border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.ex-card.st-new { border-left-color: var(--text-muted); }
+.ex-card.st-ok, .ex-card.st-done, .ex-card.ex-done { border-left-color: var(--good); }
+.ex-card.st-caution { border-left-color: var(--warn); }
+.ex-card.st-blocked, .ex-card.st-stop, .ex-card.ex-paused { border-left-color: var(--danger); opacity: 0.92; }
+.ex-card.ex-done { opacity: 0.82; }
+.ex-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.ex-name { font-weight: 700; font-size: 1.03rem; line-height: 1.3; text-wrap: balance; }
+.ex-badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+.chip {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 4px 8px; border-radius: 20px;
+  background: var(--surface-2); color: var(--text-muted); white-space: nowrap;
+  border: none; cursor: pointer;
+}
+.chip-straps { background: var(--warn-bg); color: var(--warn); }
+.chip-warn { background: var(--danger-bg); color: var(--danger); }
+.chip-hint { background: var(--accent-bg); color: var(--accent-strong); }
+.chip-hist { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+
+.ex-targets { display: flex; gap: 14px; align-items: baseline; margin: 10px 0 4px; }
+.tgt-main { font-size: 1.55rem; font-weight: 700; }
+.tgt-weight { font-size: 1.55rem; font-weight: 700; color: var(--accent); }
+.ex-sub { color: var(--text-muted); font-size: 0.78rem; line-height: 1.45; }
+.straps-note {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  background: var(--warn-bg); color: var(--warn); font-size: 0.82rem; font-weight: 600;
+}
+.paused-line { color: var(--danger); font-size: 0.85rem; margin: 6px 0; font-weight: 600; }
+
+/* ---------- set logging ---------- */
+.set-done {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--surface-2); border-radius: 8px;
+  padding: 8px 12px; margin-top: 8px; font-size: 0.92rem;
+}
+.set-no { color: var(--text-muted); font-weight: 700; }
+.pain-lo { color: var(--good); } .pain-mid { color: var(--warn); } .pain-hi { color: var(--danger); font-weight: 700; }
+
+.set-input { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 10px; }
+.set-input-title { font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
+.si-row { display: flex; gap: 10px; }
+.si-field { flex: 1; margin-bottom: 10px; }
+.si-field label {
+  display: block; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+}
+
+.stepper { display: flex; align-items: stretch; gap: 6px; }
+.stepper button {
+  width: 44px; min-height: 44px; font-size: 1.4rem; font-weight: 700;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; cursor: pointer; transition: transform 0.1s ease;
+}
+.stepper button:active { transform: scale(0.94); }
+.stepper input {
+  flex: 1; width: 100%; min-width: 0; text-align: center;
+  font-size: 1.25rem; font-weight: 700;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 4px;
+}
+
+.rpe-chips, .pain-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.pchip {
+  min-width: 40px; min-height: 42px; border-radius: 9px;
+  background: var(--surface); color: var(--text-muted);
+  border: 1.5px solid var(--border); font-size: 1rem; font-weight: 700; cursor: pointer;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  transition: transform 0.1s ease;
+}
+.pchip:active { transform: scale(0.93); }
+.pain-chips .pchip { min-width: 27px; min-height: 40px; font-size: 0.9rem; flex: 1; }
+/* unselected tier tint — shows the RPE/pain gradient before you pick */
+.pchip.plo { background: color-mix(in srgb, var(--good) 10%, var(--surface)); border-color: color-mix(in srgb, var(--good) 30%, var(--border)); }
+.pchip.pmid { background: color-mix(in srgb, var(--warn) 12%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 32%, var(--border)); }
+.pchip.phi { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 32%, var(--border)); }
+.pchip.sel.plo, .pchip.sel { border-color: var(--good); color: var(--good); background: var(--good-bg); }
+.pchip.sel.pmid { border-color: var(--warn); color: var(--warn); background: var(--warn-bg); }
+.pchip.sel.phi { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+
+/* ---------- buttons ---------- */
+.btn {
+  padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: transform 0.1s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.btn-danger { background: var(--danger); color: var(--accent-contrast); border-color: var(--danger); }
+.btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+.btn-full { display: block; width: 100%; margin-top: 10px; }
+.btn-big { padding: 18px; font-size: 1.1rem; }
+.btn-sm { padding: 6px 14px; font-size: 1rem; }
+.link-btn {
+  background: none; border: none; color: var(--accent);
+  font-size: 0.85rem; cursor: pointer; padding: 8px 4px; text-decoration: underline;
+}
+.skip-link { display: block; margin: 6px auto 0; color: var(--text-muted); }
+
+/* ---------- session ---------- */
+.session-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted);
+}
+.session-progress { font-weight: 800; color: var(--accent); font-size: 1.05rem; }
+
+/* ---------- follow-up ---------- */
+.followup { border-color: var(--warn); }
+.fu-title { font-weight: 700; margin-bottom: 10px; color: var(--warn); }
+.fu-row { margin-bottom: 10px; }
+.fu-ex { font-size: 0.85rem; margin-bottom: 4px; }
+
+/* ---------- rest timer ---------- */
+#rest-timer {
+  position: fixed; left: 8px; right: 8px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  background: var(--accent); color: var(--accent-contrast); border-radius: 16px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; z-index: 30;
+  box-shadow: var(--shadow); transition: background 0.2s ease;
+}
+#rest-timer.rt-done { background: var(--good); animation: pulse 0.7s infinite alternate; }
+@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.025); } }
+.rt-info { flex: 1; min-width: 0; }
+.rt-label { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; opacity: 0.85; text-transform: uppercase; }
+.rt-ex { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt-time { font-size: 2rem; font-weight: 700; }
+.rt-actions { display: flex; gap: 6px; }
+.rt-btn {
+  background: color-mix(in srgb, var(--accent-contrast) 20%, transparent); color: var(--accent-contrast);
+  border: none; border-radius: 8px; padding: 8px 10px; font-weight: 700; cursor: pointer; font-size: 0.85rem;
+}
+
+/* ---------- tabbar ---------- */
+#tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+  display: flex; background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1; padding: 10px 0 8px;
+  background: none; border: none; color: var(--text-muted);
+  font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.tab.active { color: var(--accent); }
+.tab-ico { font-size: 1.3rem; }
+.badge {
+  display: inline-block; background: var(--danger); color: var(--accent-contrast);
+  border-radius: 10px; padding: 0 5px; font-size: 0.6rem; margin-left: 3px;
+}
+
+/* ---------- modal / toast ---------- */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(10, 8, 5, 0.55);
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;
+  max-width: 420px; width: 100%; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow);
+}
+.modal h3 { margin: 0 0 10px; text-wrap: balance; }
+.modal p { margin: 0 0 10px; line-height: 1.5; font-size: 0.92rem; }
+.modal-btns { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.modal-btns .btn { flex: 1; }
+.hint-line { color: var(--accent-strong); }
+.warn-line { color: var(--warn); }
+.toast {
+  position: fixed; bottom: calc(142px + env(safe-area-inset-bottom));
+  left: 16px; right: 16px; z-index: 60;
+  background: var(--text); color: var(--bg);
+  border-radius: 12px; padding: 12px 16px;
+  font-size: 0.9rem; line-height: 1.4; text-wrap: balance;
+  opacity: 0; transform: translateY(10px); transition: all 0.3s;
+  box-shadow: var(--shadow);
+}
+.toast.show { opacity: 1; transform: none; }
+
+/* ---------- history ---------- */
+.session-card summary { cursor: pointer; font-size: 0.95rem; padding: 2px 0; }
+.hist-ex { margin: 8px 0; font-size: 0.85rem; line-height: 1.55; }
+.select-full {
+  width: 100%; padding: 10px; border-radius: 10px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); font-size: 0.95rem; margin-bottom: 8px;
+}
+.chart { width: 100%; height: auto; margin-top: 4px; overflow: visible; }
+.c-line { fill: none; stroke: var(--accent); stroke-width: 3; }
+.c-dot { fill: var(--accent); }
+.c-dot-pain { fill: var(--danger); }
+.c-grid { stroke: var(--border); stroke-width: 1; }
+.c-txt { fill: var(--text-muted); font-size: 12px; }
+.c-val { fill: var(--text); font-weight: 700; text-anchor: middle; }
+.c-date { text-anchor: middle; font-size: 11px; }
+.chart-legend { margin-top: 4px; }
+
+/* ---------- nutrition ---------- */
+.nu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nu-field label {
+  display: block; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+}
+.nu-field input {
+  width: 100%; padding: 12px; border-radius: 10px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); font-size: 1.08rem; font-weight: 700; text-align: center;
+}
+.nu-checks { margin-top: 12px; }
+.check {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; margin-bottom: 8px; font-size: 0.88rem; cursor: pointer; line-height: 1.4;
+}
+.check.on { border-color: var(--good); background: var(--good-bg); }
+.check input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--good); }
+.pbar {
+  position: relative; height: 30px; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; margin-top: 12px; overflow: hidden;
+}
+.pbar-fill { height: 100%; background: var(--warn); transition: width 0.3s; }
+.pbar-fill.ok { background: var(--good); }
+.pbar span {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700; color: var(--text);
+}
+.rules { margin: 0; padding-left: 18px; font-size: 0.85rem; line-height: 1.6; color: var(--text); }
+.rules li { margin-bottom: 6px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.tbl th, .tbl td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tbl th { color: var(--text-muted); font-weight: 600; }
+.nu-hist { font-size: 0.82rem; padding: 5px 0; border-bottom: 1px solid var(--border); color: var(--text); }
+
+/* ---------- rehab ---------- */
+.rehab-check { align-items: center; }
+.rehab-week { display: flex; gap: 6px; }
+.rw-day {
+  flex: 1; text-align: center; padding: 8px 0;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  font-size: 0.75rem; color: var(--text-muted); font-family: ui-monospace, 'SF Mono', monospace;
+}
+.rw-day.ok { background: var(--good-bg); border-color: var(--good); color: var(--good); font-weight: 700; }
+
+/* ---------- plan ---------- */
+.week-ctl { display: flex; align-items: center; gap: 10px; font-size: 1rem; }
+.gate-check { padding: 5px 0; font-size: 0.88rem; }
+.plan-ex { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.plan-ex:last-child { border-bottom: none; }
+
+@media (min-width: 640px) {
+  html { font-size: 17px; }
+}
+
+/* wide content never forces the page to scroll sideways */
+.tbl, .chart { max-width: 100%; }
+
+/* RPE helper + video + rozgrzewka */
+.rpe-q {
+  background: none; border: none; color: var(--accent);
+  font-size: 0.75rem; cursor: pointer; padding: 2px 4px; text-decoration: underline dotted;
+}
+.rpe-q-card { display: block; margin-top: 8px; font-size: 0.82rem; padding: 4px 0; }
+.video-btn { text-decoration: none; text-align: center; background: var(--accent2); color: #fff; }
+.warmup-card { border-left: 4px solid var(--warn); }
+.warmup-card summary { cursor: pointer; font-weight: 700; padding: 2px 0; }
+.warmup-step {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 0; border-bottom: 1px solid var(--card2);
+  font-size: 0.88rem; line-height: 1.4;
+}
+.warmup-step:last-child { border-bottom: none; }
+.warmup-step input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--ok); }
+.warmup-step.done span { opacity: 0.55; text-decoration: line-through; }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div id="topbar-title">Trening <span id="app-ver" class="app-ver"></span></div>
+  <div id="topbar-meta"></div>
+</header>
+
+<main id="view"></main>
+
+<div id="rest-timer" class="hidden">
+  <div class="rt-info">
+    <div class="rt-label">Przerwa</div>
+    <div class="rt-ex"></div>
+  </div>
+  <div class="rt-time">0:00</div>
+  <div class="rt-actions">
+    <button class="rt-btn" data-rt="-15">−15s</button>
+    <button class="rt-btn" data-rt="+15">+15s</button>
+    <button class="rt-btn rt-skip" data-rt="skip">Pomiń</button>
+  </div>
+</div>
+
+<nav id="tabbar">
+  <button class="tab active" data-tab="workout"><span class="tab-ico">🏋️</span><span>Trening</span></button>
+  <button class="tab" data-tab="history"><span class="tab-ico">📈</span><span>Historia</span></button>
+  <button class="tab" data-tab="nutrition"><span class="tab-ico">🍗</span><span>Żywienie</span></button>
+  <button class="tab" data-tab="rehab"><span class="tab-ico">💪</span><span>Rehab<span id="rehab-badge" class="badge hidden">!</span></span></button>
+  <button class="tab" data-tab="plan"><span class="tab-ico">⚙️</span><span>Plan</span></button>
+</nav>
+
+<div id="modal-root"></div>
+<script>
+'use strict';
+
+// Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
+const APP_VERSION = '006';
+
+// ============================================================
+// DANE PLANU — powrót do treningów po epicondylitis lateralis
+// Diagnoza: ~1.04.2026 | Przerwa: 3.04–18.07.2026 (~15 tyg.)
+// ============================================================
+
+const PLAN_DATA = {
+  planStartDate: '2026-07-20',
+
+  exercises: {
+    leg_press: {
+      name: 'Leg press', muscles: ['nogi-przód'], elbowSafe: true,
+      warnings: ['3.02.2026: ból pod lewym żebrem (powyżej wątroby) przy leg press — obserwuj przy powrocie.'],
+      preBreak: '75–80 kg (3x10)',
+      desc: 'Stopy na płycie na szerokość bioder, plecy i miednica przyklejone do oparcia. Opuszczaj płytę 3 s do kąta ~90° w kolanach, wypychaj bez blokowania kolan.',
+      video: 'https://www.youtube.com/results?search_query=leg+press+technika'
+    },
+    hip_thrust: {
+      name: 'Hip thrust (sztanga, paski)', muscles: ['nogi-tył', 'pośladki'], elbowSafe: true, straps: true,
+      preBreak: '60 kg (3x10–12)',
+      desc: 'Łopatki oparte o ławkę, sztanga na biodrach (podkładka). Unieś biodra do pełnego wyprostu, zatrzymaj 1 s na górze, napnij pośladki. Broda do klatki.',
+      video: 'https://www.youtube.com/results?search_query=hip+thrust+technika'
+    },
+    goblet_squat: {
+      name: 'Przysiad goblet (hantla przy klatce)', muscles: ['nogi-przód'], elbowSafe: 'warn',
+      hint: 'Sprawdź komfort łokcia przy trzymaniu hantli przy klatce.',
+      desc: 'Hantla trzymana pionowo przy mostku, łokcie pod spodem. Przysiad z prostymi plecami, kolana idą za palcami stóp, łokcie na dole między kolana.',
+      video: 'https://www.youtube.com/results?search_query=goblet+squat+technika'
+    },
+    leg_extension: {
+      name: 'Wyprost nóg (maszyna)', muscles: ['nogi-przód'], elbowSafe: true,
+      desc: 'Wałek na wysokości kostek, kolano w osi obrotu maszyny. Wyprostuj nogi płynnie, na górze zatrzymaj moment, opuszczaj wolno (2–3 s).',
+      video: 'https://www.youtube.com/results?search_query=wyprosty+nog+maszyna+technika'
+    },
+    lat_pulldown_neutral: {
+      name: 'Ściąganie wyciągu górnego, V-bar neutralny', muscles: ['plecy'], elbowSafe: true,
+      hint: 'Uchwyt neutralny (młotkowy) — kontroluj ból łokcia.',
+      desc: 'Uchwyt V (dłonie do siebie). Ściągaj drążek do górnej części klatki prowadząc łokcie w dół, lekko odchylony tułów, bez bujania. Powrót kontrolowany 3 s.',
+      video: 'https://www.youtube.com/results?search_query=lat+pulldown+neutral+grip+technika'
+    },
+    chest_press: {
+      name: 'Chest press (maszyna)', muscles: ['klatka'], elbowSafe: true,
+      preBreak: 'Bench press 45–47,5 kg (3x8–9)',
+      desc: 'Uchwyty na wysokości środka klatki, łopatki ściągnięte do oparcia. Wypychaj do prawie pełnego wyprostu, wracaj kontrolowanie do rozciągnięcia klatki.',
+      video: 'https://www.youtube.com/results?search_query=chest+press+maszyna+technika'
+    },
+    shoulder_press_machine: {
+      name: 'Shoulder press (maszyna)', muscles: ['barki'], elbowSafe: true,
+      preBreak: 'Hantle 2x12–14 kg (3x8–9)',
+      desc: 'Siedzisko tak, by uchwyty były na wysokości uszu. Wyciskaj nad głowę bez pełnego blokowania łokci, opuszczaj do kąta ~90° w łokciach.',
+      video: 'https://www.youtube.com/results?search_query=shoulder+press+maszyna+technika'
+    },
+    pallof_press: {
+      name: 'Pallof press', muscles: ['core'], elbowSafe: true,
+      preBreak: '12 kg (3x10–12/str.)',
+      desc: 'Stań bokiem do wyciągu, linka na wysokości mostka. Wypchnij uchwyt przed siebie i trzymaj — nie pozwól, by tułów się skręcił. Wróć kontrolowanie.',
+      video: 'https://www.youtube.com/results?search_query=pallof+press+technika'
+    },
+    face_pull_straps: {
+      name: 'Face pull (pasy na nadgarstkach)', muscles: ['barki-tył', 'plecy'], elbowSafe: 'warn', straps: true,
+      hint: 'Bez chwytu dłonią — pasy na nadgarstkach. Przerwij przy jakimkolwiek bólu łokcia.',
+      preBreak: '12 kg (3x12–15)',
+      desc: 'Lina na wyciągu na wysokości twarzy. Ciągnij końce liny do uszu, łokcie szeroko i wysoko, na końcu rozdziel dłonie. U Ciebie: pasy zamiast chwytu dłonią.',
+      video: 'https://www.youtube.com/results?search_query=face+pull+technika'
+    },
+    plank_deadbug: {
+      name: 'Plank / dead bug', muscles: ['core'], elbowSafe: true, bodyweight: true, timeBased: true,
+      desc: 'Plank: przedramiona na ziemi, ciało w linii prostej, napięty brzuch i pośladki. Dead bug: na plecach, przeciwległa ręka i noga opadają wolno, lędźwie dociśnięte.',
+      video: 'https://www.youtube.com/results?search_query=dead+bug+plank+technika'
+    },
+    seated_row_neutral: {
+      name: 'Wiosowanie siedząc, neutralny uchwyt (maszyna)', muscles: ['plecy'], elbowSafe: true,
+      hint: 'Uchwyt neutralny. Maszyna zamiast sztangi wolnej.',
+      preBreak: 'Hantla/maszyna 16–25 kg (3x10–11)',
+      desc: 'Klatka oparta o poduszkę (jeśli jest), dłonie do siebie. Ciągnij łokcie do tyłu wzdłuż tułowia, ściągnij łopatki na końcu, wracaj wolno 3 s.',
+      video: 'https://www.youtube.com/results?search_query=seated+row+neutral+grip+technika'
+    },
+    pullup_neutral_assisted: {
+      name: 'Podciąganie neutralnym uchwytem (asystowane)', muscles: ['plecy', 'biceps'], elbowSafe: 'warn', bodyweight: true,
+      hint: 'TYLKO przy 0 bólu łokcia. Uchwyt neutralny, asysta.',
+      preBreak: 'Masa własna, 3 serie do RPE 7–8',
+      desc: 'Uchwyty równoległe (dłonie do siebie), asysta maszyny lub gumy. Start z aktywnych barków, broda nad drążek, opuszczanie kontrolowane. Zero szarpania.',
+      video: 'https://www.youtube.com/results?search_query=podciaganie+neutralny+chwyt+asysta'
+    },
+    biceps_curl_hammer: {
+      name: 'Biceps curl uchwyt młotkowy (lekkie hantle)', muscles: ['biceps'], elbowSafe: 'warn',
+      hint: 'Uchwyt młotkowy, niski ciężar. Klasyczny (supinowany) chwyt wykluczony.',
+      warnings: ['16.01.2026: mocny trening w domu — biceps bolał jeszcze tydzień. Sygnał przeciążenia bicepsa.'],
+      preBreak: '9 kg (2–3x10–12)',
+      desc: 'Hantle trzymane jak młotek (kciuk do góry) przez cały ruch. Łokcie przy tułowiu, unoszenie bez bujania, opuszczanie wolne 3 s.',
+      video: 'https://www.youtube.com/results?search_query=hammer+curl+technika'
+    },
+    deadlift_straps: {
+      name: 'Deadlift (lifting straps)', muscles: ['nogi-tył', 'plecy'], elbowSafe: true, straps: true,
+      hint: 'Paski obowiązkowo — zero chwytu overhand bez zabezpieczenia.',
+      preBreak: '70–75 kg (3x6–8)',
+      desc: 'Sztanga nad śródstopiem, proste plecy, biodra między kolanami a barkami. Pchaj nogami w podłogę, sztanga blisko ciała. Paski przejmują chwyt — dłonie tylko prowadzą.',
+      video: 'https://www.youtube.com/results?search_query=martwy+ciag+technika'
+    },
+    split_squat: {
+      name: 'Split squat / step-up (obciążenie na barkach)', muscles: ['nogi-przód', 'nogi-tył'], elbowSafe: true,
+      hint: 'Obciążenie na barkach/tułowiu, nie w dłoniach.',
+      warnings: [
+        '17.01.2026: naderwany dwugłowy uda przy wykrokach.',
+        '14–15.03.2026: lekki nawrót kontuzji dwugłowego lewej nogi przy wykrokach — progresuj bardzo ostrożnie.'
+      ],
+      preBreak: 'Wykroki 2x10–16 kg (3x10–11/str.)',
+      desc: 'Wykrok w miejscu: jedna noga z przodu, druga z tyłu na palcach. Schodź pionowo w dół 3 s, kolano przedniej nogi nad stopą. U Ciebie: ciężar na barkach, nie w dłoniach.',
+      video: 'https://www.youtube.com/results?search_query=split+squat+technika'
+    },
+    seal_row: {
+      name: 'Focze wiosło / seal row (maszyna, neutralny uchwyt)', muscles: ['plecy'], elbowSafe: true,
+      hint: 'Neutralny uchwyt, maszyna.',
+      preBreak: '15–17,5 kg (3x10–12)',
+      desc: 'Leżąc klatką na ławce/maszynie, ręce zwisają. Ciągnij łokcie do sufitu, ściągnij łopatki, bez odrywania klatki. Opuszczanie 3 s.',
+      video: 'https://www.youtube.com/results?search_query=seal+row+technika'
+    },
+    back_squat_light: {
+      name: 'Przysiad z obciążeniem na barkach', muscles: ['nogi-przód', 'core'], elbowSafe: true,
+      hint: 'Zamiennik farmer carry w fazie 1 — obciążenie na barkach, nie w dłoniach.',
+      desc: 'Sztanga na górze pleców (nie na karku), łokcie pod sztangą. Przysiad do równoległości ud, kolana na zewnątrz, pięty w podłodze.',
+      video: 'https://www.youtube.com/results?search_query=przysiad+ze+sztanga+technika'
+    },
+    farmer_carry_straps: {
+      name: 'Farmer carry (z paskami)', muscles: ['core', 'chwyt'], elbowSafe: 'warn', straps: true, distanceBased: true,
+      hint: 'Start: 2x15 kg, 40 m. Obserwuj łokieć 48h po. Paski obowiązkowo.',
+      preBreak: '2x25–28 kg (3x60–70 m)',
+      desc: 'Dwie hantle/kettle w dłoniach (u Ciebie: na paskach), wyprostowana sylwetka, barki ściągnięte w dół. Idź równym tempem, bez kołysania na boki.',
+      video: 'https://www.youtube.com/results?search_query=farmer+carry+technika'
+    },
+    db_press_free: {
+      name: 'Wyciskanie hantlami (wolny ciężar)', muscles: ['klatka'], elbowSafe: 'warn',
+      hint: 'Start od 60% ostatniego ciężaru z maszyny chest press.',
+      preBreak: '2x15–17,5 kg (3x10–11)',
+      desc: 'Leżąc na ławce, hantle nad klatką. Opuszczaj do boków klatki (łokcie ~45° od tułowia), wyciskaj do góry bez stykania hantli.',
+      video: 'https://www.youtube.com/results?search_query=wyciskanie+hantli+na+lawce+technika'
+    },
+    pullup_unassisted: {
+      name: 'Podciąganie neutralne bez asysty', muscles: ['plecy', 'biceps'], elbowSafe: 'warn', bodyweight: true,
+      hint: 'Tylko jeśli faza 1 przeszła bez bólu.',
+      desc: 'Uchwyty równoległe, pełny zwis z aktywnymi barkami. Podciągnij brodę nad drążek, opuszczanie kontrolowane 2–3 s.',
+      video: 'https://www.youtube.com/results?search_query=podciaganie+neutralnym+chwytem+technika'
+    },
+    barbell_row_straps: {
+      name: 'Wiosowanie sztangą (z paskami)', muscles: ['plecy'], elbowSafe: 'warn', straps: true,
+      hint: 'Wyłącznie z paskami, niski ciężar na start.',
+      desc: 'Tułów pochylony ~45°, proste plecy, sztanga na paskach. Ciągnij do dołu brzucha prowadząc łokcie przy tułowiu, opuszczaj wolno.',
+      video: 'https://www.youtube.com/results?search_query=wioslowanie+sztanga+technika'
+    }
+  },
+
+  // Domyślna rozgrzewka przed każdym treningiem (Pedro może nadpisać w pliku planu linią "Rozgrzewka:")
+  warmupDefault: [
+    '5 min rower / orbitrek / szybki marsz — podnieś tętno',
+    'Krążenia ramion, bioder i nadgarstków — 2 min',
+    'Stretching wyprostników przedramienia 2x30 s (rehab łokcia!)',
+    '1 seria rozgrzewkowa pierwszego ćwiczenia: ~50% ciężaru roboczego, 12–15 powtórzeń'
+  ],
+
+  phases: [
+    {
+      id: 0,
+      name: 'Faza 0 — Reintroduction',
+      desc: 'Full Body 3x/tydzień (A/B/C), RPE ≤5–6. Tygodnie 1–2.',
+      weeks: 2,
+      sessionsPerWeek: 3,
+      rpeTarget: { 1: 5.5, 2: 5.5 },
+      rpeLabel: { 1: 'RPE ≤5–6', 2: 'RPE ≤5–6' },
+      advanceCriteria: '2 tygodnie bez bólu łokcia w trakcie i 24h po treningu, przy wszystkich ćwiczeniach.',
+      days: {
+        A: {
+          label: 'Nogi + plecy (zero chwytu obciążonego)',
+          items: [
+            { ex: 'leg_press', sets: 3, reps: '10–12', weight: 57.5, weightLabel: '55–60 kg', tempo: '3110', rest: 120 },
+            { ex: 'hip_thrust', sets: 3, reps: '10–12', weight: 47.5, weightLabel: '45–50 kg', tempo: '2111', rest: 120 },
+            { ex: 'goblet_squat', sets: 3, reps: '10', weight: 12, weightLabel: '10–14 kg', tempo: '3110', rest: 90 },
+            { ex: 'leg_extension', sets: 3, reps: '12', weight: null, weightLabel: 'wg maszyny, RPE 6', tempo: '2110', rest: 90 },
+            { ex: 'lat_pulldown_neutral', sets: 3, reps: '10–12', weight: 32.5, weightLabel: '30–35 kg', tempo: '3110', rest: 90 }
+          ]
+        },
+        B: {
+          label: 'Pierś + barki + core',
+          items: [
+            { ex: 'chest_press', sets: 3, reps: '10–12', weight: null, weightLabel: 'RPE 6', tempo: '3110', rest: 120 },
+            { ex: 'shoulder_press_machine', sets: 3, reps: '10–12', weight: null, weightLabel: 'RPE 6', tempo: '2110', rest: 105, restLabel: '90–120 s' },
+            { ex: 'pallof_press', sets: 3, reps: '10/str.', weight: 9, weightLabel: '8–10 kg', tempo: '2121', rest: 60 },
+            { ex: 'face_pull_straps', sets: 3, reps: '12–15', weight: 9, weightLabel: '8–10 kg', tempo: '2121', rest: 70, restLabel: '60–75 s' },
+            { ex: 'plank_deadbug', sets: 3, reps: '30–45 s', weight: null, weightLabel: 'masa własna', tempo: '—', rest: 45 }
+          ]
+        },
+        C: {
+          label: 'Nogi (tył) + plecy (grubość) + core',
+          items: [
+            { ex: 'back_squat_light', sets: 3, reps: '10', weight: null, weightLabel: 'RPE 6', tempo: '3110', rest: 90 },
+            { ex: 'seated_row_neutral', sets: 3, reps: '10', weight: null, weightLabel: 'RPE 6', tempo: '3110', rest: 90 },
+            { ex: 'leg_extension', sets: 3, reps: '12', weight: null, weightLabel: 'wg maszyny, RPE 6', tempo: '2110', rest: 90 },
+            { ex: 'shoulder_press_machine', sets: 3, reps: '8–10', weight: null, weightLabel: 'RPE 6', tempo: '2110', rest: 105, restLabel: '90–120 s' },
+            { ex: 'pallof_press', sets: 3, reps: '10/str.', weight: 9, weightLabel: '8–10 kg', tempo: '2121', rest: 60 }
+          ]
+        }
+      },
+      rotation: ['A', 'B', 'C']
+    },
+    {
+      id: 1,
+      name: 'Faza 1 — Zmodyfikowany A/B/C',
+      desc: '3x/tydzień, mezocykl 4-tygodniowy: T1 RPE 6 → T2 RPE 6–7 → T3 RPE 7–8 → T4 deload RPE 6.',
+      weeks: 4,
+      sessionsPerWeek: 3,
+      rpeTarget: { 1: 6, 2: 6.5, 3: 7.5, 4: 6 },
+      rpeLabel: { 1: 'RPE 6', 2: 'RPE 6–7', 3: 'RPE 7–8', 4: 'deload RPE 6' },
+      advanceCriteria: '6 tygodni bez bólu łokcia (faza 0 + faza 1) — dopiero wtedy reintegracja farmer carry i wolnych ciężarów.',
+      days: {
+        A: {
+          label: 'Nogi (przód) + plecy + barki',
+          items: [
+            { ex: 'lat_pulldown_neutral', tempo: '3110', rest: 85, restLabel: '75–90 s',
+              byWeek: { 1: { sets: 3, reps: '12', weight: 30 }, 2: { sets: 3, reps: '13', weight: 30 }, 3: { sets: 3, reps: '15', weight: 32.5 }, 4: { sets: 2, reps: '12', weight: 30 } } },
+            { ex: 'leg_press', tempo: '3110', rest: 120,
+              byWeek: { 1: { sets: 3, reps: '10', weight: 60 }, 2: { sets: 3, reps: '10', weight: 65 }, 3: { sets: 3, reps: '10', weight: 70 }, 4: { sets: 2, reps: '10', weight: 60 } } },
+            { ex: 'hip_thrust', tempo: '2111', rest: 120,
+              byWeek: { 1: { sets: 3, reps: '10', weight: 50 }, 2: { sets: 3, reps: '11', weight: 50 }, 3: { sets: 3, reps: '12', weight: 52.5 }, 4: { sets: 2, reps: '10', weight: 50 } } },
+            { ex: 'chest_press', tempo: '2110', rest: 120,
+              byWeek: { 1: { sets: 3, reps: '8', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '9', weight: null, note: '+5%' }, 3: { sets: 3, reps: '8', weight: null, note: '+5%' }, 4: { sets: 2, reps: '8', weight: null, note: 'poziom T1' } } },
+            { ex: 'shoulder_press_machine', tempo: '2110', rest: 105, restLabel: '90–120 s',
+              byWeek: { 1: { sets: 3, reps: '8', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '9', weight: null, note: '+5%' }, 3: { sets: 3, reps: '8', weight: null, note: '+5%' }, 4: { sets: 2, reps: '8', weight: null, note: 'poziom T1' } } }
+          ]
+        },
+        B: {
+          label: 'Plecy (grubość) + biceps + core',
+          items: [
+            { ex: 'face_pull_straps', tempo: '2121', rest: 70, restLabel: '60–75 s',
+              byWeek: { 1: { sets: 3, reps: '12', weight: 10 }, 2: { sets: 3, reps: '13', weight: 10 }, 3: { sets: 3, reps: '15', weight: 10 }, 4: { sets: 2, reps: '12', weight: 10 } } },
+            { ex: 'seated_row_neutral', tempo: '3110', rest: 90,
+              byWeek: { 1: { sets: 3, reps: '10', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '11', weight: null, note: 'ten sam ciężar' }, 3: { sets: 3, reps: '10', weight: null, note: '+5%' }, 4: { sets: 2, reps: '10', weight: null, note: 'poziom T1' } } },
+            { ex: 'pullup_neutral_assisted', tempo: 'kontrolowane', rest: 120,
+              byWeek: { 1: { sets: 3, reps: 'do RPE 7', weight: null, note: '2–3 powt. w zapasie' }, 2: { sets: 3, reps: 'ostatnia do odmowy', weight: null, note: '1 seria do odmowy' }, 3: { sets: 3, reps: 'ostatnia max RPE 8', weight: null }, 4: { sets: 3, reps: 'wynik T1', weight: null, note: 'wracasz do wyniku T1' } } },
+            { ex: 'biceps_curl_hammer', tempo: '3110', rest: 75,
+              byWeek: { 1: { sets: 2, reps: '10', weight: 6.5, note: '6–7 kg' }, 2: { sets: 2, reps: '12', weight: 6.5, note: 'ten sam' }, 3: { sets: 3, reps: '10', weight: 7.5, note: '+1 kg' }, 4: { sets: 2, reps: '10', weight: 6.5, note: 'poziom T1' } } },
+            { ex: 'pallof_press', tempo: '2121', rest: 50, restLabel: '45–60 s',
+              byWeek: { 1: { sets: 3, reps: '10/str.', weight: 10 }, 2: { sets: 3, reps: '10/str.', weight: 10 }, 3: { sets: 3, reps: '10/str.', weight: 10 }, 4: { sets: 2, reps: '10/str.', weight: 10 } } }
+          ]
+        },
+        C: {
+          label: 'Nogi (tył) + pchanie',
+          items: [
+            { ex: 'deadlift_straps', tempo: '2110', rest: 150,
+              byWeek: { 1: { sets: 3, reps: '6', weight: 50 }, 2: { sets: 3, reps: '7', weight: 50 }, 3: { sets: 3, reps: '6', weight: 53.75, note: '52,5–55 kg' }, 4: { sets: 2, reps: '6', weight: 50 } } },
+            { ex: 'split_squat', tempo: '3110', rest: 90,
+              byWeek: { 1: { sets: 3, reps: '10/str.', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '11/str.', weight: null, note: 'ten sam' }, 3: { sets: 3, reps: '10/str.', weight: null, note: '+obciążenie' }, 4: { sets: 2, reps: '10/str.', weight: null, note: 'poziom T1' } } },
+            { ex: 'chest_press', tempo: '2110', rest: 120,
+              byWeek: { 1: { sets: 3, reps: '10', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '11', weight: null, note: '+5%' }, 3: { sets: 3, reps: '10', weight: null, note: '+5%' }, 4: { sets: 2, reps: '10', weight: null, note: 'poziom T1' } } },
+            { ex: 'seal_row', tempo: '3110', rest: 90,
+              byWeek: { 1: { sets: 3, reps: '10', weight: 12 }, 2: { sets: 3, reps: '12', weight: 12 }, 3: { sets: 3, reps: '10', weight: 14 }, 4: { sets: 2, reps: '10', weight: 12 } } },
+            { ex: 'back_squat_light', tempo: '3110', rest: 90,
+              byWeek: { 1: { sets: 3, reps: '10', weight: null, note: 'RPE 6' }, 2: { sets: 3, reps: '10', weight: null, note: '+5%' }, 3: { sets: 3, reps: '10', weight: null, note: '+5%' }, 4: { sets: 2, reps: '10', weight: null, note: 'poziom T1' } } }
+          ]
+        }
+      },
+      rotation: ['A', 'B', 'C']
+    },
+    {
+      id: 2,
+      name: 'Faza 2 — Reintegracja',
+      desc: 'Tydzień 7+. Plan fazy 1 + stopniowy powrót farmer carry i wolnych ciężarów. Każdą nowość obserwuj 48h.',
+      weeks: 4,
+      sessionsPerWeek: 3,
+      rpeTarget: { 1: 6, 2: 6.5, 3: 7.5, 4: 6 },
+      rpeLabel: { 1: 'RPE 6', 2: 'RPE 6–7', 3: 'RPE 7–8', 4: 'deload RPE 6' },
+      advanceCriteria: null,
+      inheritDays: 1,
+      extras: {
+        B: [
+          { ex: 'farmer_carry_straps', sets: 2, reps: '40 m', weight: 15, weightLabel: '2x15 kg', tempo: 'stabilny tułów', rest: 90, optional: true },
+          { ex: 'pullup_unassisted', sets: 2, reps: 'do RPE 7', weight: null, weightLabel: 'masa własna', tempo: 'kontrolowane', rest: 120, optional: true,
+            replaces: 'pullup_neutral_assisted' }
+        ],
+        C: [
+          { ex: 'farmer_carry_straps', sets: 2, reps: '40 m', weight: 15, weightLabel: '2x15 kg', tempo: 'stabilny tułów', rest: 90, optional: true },
+          { ex: 'db_press_free', sets: 3, reps: '10', weight: null, weightLabel: '60% ciężaru z maszyny', tempo: '2110', rest: 120, optional: true,
+            replaces: 'chest_press' },
+          { ex: 'barbell_row_straps', sets: 3, reps: '10', weight: null, weightLabel: 'niski ciężar', tempo: '3110', rest: 90, optional: true,
+            replaces: 'seal_row' }
+        ]
+      },
+      rotation: ['A', 'B', 'C']
+    }
+  ],
+
+  rehab: [
+    { id: 'eccentric', name: 'Eccentric wrist extension (taśma)', desc: '3x15 powt., 3–4 s faza opuszczania, codziennie.' },
+    { id: 'stretching', name: 'Stretching wyprostników przedramienia', desc: '3x30 s, kilka razy dziennie — szczególnie przed i po treningu.' },
+    { id: 'ice', name: 'Lód / krioterapia (przy dyskomforcie)', desc: '10–15 min na okolicę nadkłykcia bocznego po treningu.' }
+  ],
+  rehabNotes: [
+    'Unikaj intensywnego chwytu w życiu codziennym (kierownica motocykla, prace w ogrodzie).',
+    'Ten protokół nie zastępuje fizjoterapii — zalecenia lekarza mają priorytet.'
+  ],
+
+  nutrition: {
+    proteinPerKgMin: 1.8, proteinPerKgMax: 2.2, proteinPerKgDefault: 2.1,
+    proteinPerMeal: '0,4–0,5 g/kg, 4 porcje co 3–4 h',
+    kcalRule: 'Utrzymanie lub +200–300 kcal w dni treningowe. Nie deficyt.',
+    kcalSurplusTraining: 250,
+    carbsPreWorkout: '30–50 g węglowodanów, 1–2 h przed treningiem',
+    collagen: '15–20 g kolagenu hydrolizowanego + 100–200 mg wit. C, 30–60 min przed treningiem/rehabem',
+    omega3: 'Ryby tłuste 2–3x/tydz. lub 2–3 g EPA/DHA dziennie',
+    stagnation: 'Waga stoi 2–3 tygodnie → maks. dwie łagodne korekty naraz (±150–200 kcal/dzień + 1000–1500 kroków). Bez ekstremalnych diet.',
+    meals: [
+      { name: 'Śniadanie', timing: 'rano', protein: '30–40 g', note: 'np. jajka + serek wiejski' },
+      { name: 'Przed treningiem', timing: '1–2 h przed', protein: '20–30 g + węglowodany', note: 'lekkostrawne' },
+      { name: 'Po treningu', timing: 'do 1–2 h po', protein: '30–40 g + kolagen/wit. C', note: 'okno anaboliczne + wsparcie ścięgna' },
+      { name: 'Obiad', timing: '—', protein: '30–40 g', note: '—' },
+      { name: 'Kolacja', timing: 'wieczorem', protein: '30–40 g', note: 'kazeina/twaróg przed snem' }
+    ]
+  },
+
+  safetyRules: [
+    'Ból >2/10 w trakcie lub 24h po = ćwiczenie wstrzymane na 7 dni. Nie „przeczekujemy" bólu.',
+    'Progresja obciążenia tylko gdy RPE ≤ celu we wszystkich seriach ORAZ 0 bólu łokcia (w trakcie i 24h po).',
+    'RPE > cel+1 przez 2 sesje z rzędu = blokada progresji obciążenia.',
+    'Minimum 48 h regeneracji między sesjami tej samej grupy mięśniowej.',
+    'Deadlift, wiosowanie, farmer carry — zawsze z paskami (lifting straps).',
+    'Preferuj uchwyt neutralny (młotkowy) wszędzie, gdzie to możliwe.',
+    'Codzienny rehab łokcia niezależnie od dni treningowych.'
+  ]
+};
+
+// ============================================================
+// Trening — Powrót do siły (artifact build: bez SW/manifest,
+// bez powiadomień/wibracji/dźwięku — timer jest czysto wizualny)
+// ============================================================
+
+const STORE_KEY = 'gymapp_v1';
+
+const defaultState = () => ({
+  v: 1,
+  settings: { bodyWeightKg: null, proteinPerKg: PLAN_DATA.nutrition.proteinPerKgDefault, kcalMaintenance: null },
+  plan: { phase: 0, week: 1, phaseStartedOn: todayISO() },
+  sessions: [],
+  activeSession: null,
+  paused: {},
+  nutrition: {},
+  rehab: {},
+  customPlan: null // plan wczytany z pliku od trenera (zastępuje plan wbudowany)
+});
+
+let S = load();
+
+// ============================================================
+// PLAN OD TRENERA — import pliku JSON (szablon: przycisk w zakładce Plan)
+// ============================================================
+
+function slugify(name) {
+  return String(name).toLowerCase()
+    .replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'cwiczenie';
+}
+
+// Waliduje i normalizuje plik od trenera do struktury wewnętrznej.
+// Zwraca { plan, errors } — plan tylko gdy errors puste.
+function parseTrainerPlan(obj) {
+  const errors = [];
+  const err = m => errors.push(m);
+  if (!obj || typeof obj !== 'object') { err('Plik nie jest poprawnym JSON-em.'); return { errors }; }
+  const info = obj.plan_info || {};
+  const treningi = obj.treningi;
+  if (!Array.isArray(treningi) || !treningi.length) { err('Brak listy "treningi" albo jest pusta.'); return { errors }; }
+
+  const workouts = [];
+  treningi.forEach((t, ti) => {
+    const where = `Trening ${ti + 1}${t && t.data ? ' (' + t.data + ')' : ''}`;
+    if (!t || typeof t !== 'object') { err(`${where}: niepoprawny wpis.`); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t.data || '')) err(`${where}: pole "data" musi mieć format RRRR-MM-DD (np. 2026-08-03).`);
+    if (!t.nazwa) err(`${where}: brak pola "nazwa" (np. "A — nogi + plecy").`);
+    if (!Array.isArray(t.cwiczenia) || !t.cwiczenia.length) { err(`${where}: brak listy "cwiczenia".`); return; }
+    const wRpe = t.rpe_cel != null ? +t.rpe_cel : null;
+    if (wRpe != null && !(wRpe >= 1 && wRpe <= 10)) err(`${where}: "rpe_cel" musi być w zakresie 1–10.`);
+
+    const items = t.cwiczenia.map((c, ci) => {
+      const cw = `${where}, ćwiczenie ${ci + 1}${c && c.nazwa ? ' (' + c.nazwa + ')' : ''}`;
+      if (!c || !c.nazwa) { err(`${cw}: brak pola "nazwa".`); return null; }
+      const sets = +c.serie;
+      if (!(sets >= 1 && sets <= 20)) err(`${cw}: "serie" musi być liczbą 1–20.`);
+      if (c.powtorzenia == null || c.powtorzenia === '') err(`${cw}: brak pola "powtorzenia" (np. "10-12" albo "do RPE 7").`);
+      const rest = +c.przerwa_s;
+      if (!(rest >= 10 && rest <= 600)) err(`${cw}: "przerwa_s" musi być liczbą sekund 10–600.`);
+      const weight = (c.ciezar_kg === null || c.ciezar_kg === undefined || c.ciezar_kg === '') ? null : +c.ciezar_kg;
+      if (weight != null && !(weight >= 0 && weight < 1000)) err(`${cw}: "ciezar_kg" musi być liczbą (kg) albo null.`);
+      const cRpe = c.rpe_cel != null ? +c.rpe_cel : null;
+      if (cRpe != null && !(cRpe >= 1 && cRpe <= 10)) err(`${cw}: "rpe_cel" musi być w zakresie 1–10.`);
+      let elbow = c.bezpieczne_dla_lokcia;
+      if (elbow === undefined) elbow = true;
+      if (typeof elbow === 'string') {
+        const e = elbow.toLowerCase();
+        elbow = (e === 'ostrzezenie' || e === 'ostrzeżenie' || e === 'warn') ? 'warn'
+          : (e === 'true' || e === 'tak') ? true
+          : (e === 'false' || e === 'nie') ? false : null;
+        if (elbow === null) { err(`${cw}: "bezpieczne_dla_lokcia" musi być true / false / "ostrzezenie".`); elbow = 'warn'; }
+      }
+      return {
+        ex: c.id ? slugify(c.id) : slugify(c.nazwa),
+        name: String(c.nazwa),
+        sets: sets || 3,
+        reps: String(c.powtorzenia),
+        weight,
+        weightLabel: c.ciezar_opis ? String(c.ciezar_opis) : null,
+        tempo: c.tempo ? String(c.tempo) : '—',
+        rest: rest || 90,
+        restLabel: c.przerwa_opis ? String(c.przerwa_opis) : null,
+        rpeTarget: cRpe,
+        elbowSafe: elbow,
+        straps: !!c.paski,
+        optional: !!c.opcjonalne,
+        hint: c.wskazowka ? String(c.wskazowka) : null,
+        video: c.video ? String(c.video) : null,
+        warnings: Array.isArray(c.uwagi) ? c.uwagi.map(String) : (c.uwagi ? [String(c.uwagi)] : [])
+      };
+    }).filter(Boolean);
+
+    workouts.push({
+      id: ti + 1,
+      date: String(t.data),
+      name: String(t.nazwa || 'Trening'),
+      week: t.tydzien != null ? +t.tydzien : null,
+      rpeTarget: wRpe,
+      notes: t.uwagi ? String(t.uwagi) : null,
+      warmup: Array.isArray(t.rozgrzewka) ? t.rozgrzewka.map(String)
+        : (t.rozgrzewka ? String(t.rozgrzewka).split(';').map(s => s.trim()).filter(Boolean)
+        : (Array.isArray(info.rozgrzewka) ? info.rozgrzewka : null)),
+      items
+    });
+  });
+
+  if (errors.length) return { errors };
+  workouts.sort((a, b) => a.date < b.date ? -1 : 1);
+  workouts.forEach((w, i) => w.id = i + 1);
+  return {
+    plan: {
+      meta: {
+        trener: info.trener ? String(info.trener) : null,
+        zawodnik: info.zawodnik ? String(info.zawodnik) : null,
+        nazwa: info.nazwa ? String(info.nazwa) : 'Plan od trenera',
+        opis: info.opis ? String(info.opis) : null,
+        uwagi: info.uwagi_ogolne ? String(info.uwagi_ogolne) : null
+      },
+      workouts
+    },
+    errors: []
+  };
+}
+
+// ---------------- Parser Markdown (format zalecany dla trenera) ----------------
+function normDate(s) {
+  let m = String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return s.trim();
+  m = String(s).trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+
+// Zamienia plan w Markdown (nagłówki ## + tabele) na strukturę jak z pliku JSON.
+function parseTrainerPlanMd(text) {
+  const errors = [];
+  const info = {};
+  const treningi = [];
+  let cur = null;
+  const lines = text.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('<!--')) continue;
+
+    if (line.startsWith('# ') && !line.startsWith('## ')) {
+      info.nazwa = line.slice(2).replace(/^Plan\s*:\s*/i, '').trim();
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      const segs = line.slice(3).split('|').map(s => s.trim());
+      const date = normDate(segs[0]);
+      if (!date) errors.push(`Linia ${i + 1}: nagłówek treningu musi zaczynać się datą (RRRR-MM-DD albo DD.MM.RRRR), jest: "${segs[0]}".`);
+      cur = { data: date || segs[0], nazwa: segs[1] || 'Trening', cwiczenia: [] };
+      for (const s of segs.slice(2)) {
+        const t = s.toLowerCase();
+        const num = parseFloat(s.replace(',', '.').replace(/[^\d.,]/g, ''));
+        if (t.includes('tydz') && !isNaN(num)) cur.tydzien = num;
+        else if (t.includes('rpe') && !isNaN(num)) cur.rpe_cel = num;
+      }
+      treningi.push(cur);
+      continue;
+    }
+    const kv = line.match(/^(Trener|Zawodnik|Opis|Uwagi|Rozgrzewka)\s*:\s*(.+)$/i);
+    if (kv && !line.startsWith('|')) {
+      const k = kv[1].toLowerCase();
+      if (cur) {
+        if (k === 'uwagi') cur.uwagi = kv[2].trim();
+        else if (k === 'rozgrzewka') cur.rozgrzewka = kv[2].split(';').map(s => s.trim()).filter(Boolean);
+      }
+      else if (k === 'rozgrzewka') info.rozgrzewka = kv[2].split(';').map(s => s.trim()).filter(Boolean);
+      else if (k === 'trener') info.trener = kv[2].trim();
+      else if (k === 'zawodnik') info.zawodnik = kv[2].trim();
+      else if (k === 'opis') info.opis = kv[2].trim();
+      else if (k === 'uwagi') info.uwagi_ogolne = kv[2].trim();
+      continue;
+    }
+    if (line.startsWith('|')) {
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      if (!cells.length || cells.every(c => /^:?-{2,}:?$/.test(c))) continue; // separator |---|
+      const first = cells[0].toLowerCase();
+      if (first.startsWith('ćwicz') || first.startsWith('cwicz')) continue;   // wiersz nagłówka
+      if (!cur) { errors.push(`Linia ${i + 1}: tabela ćwiczeń przed nagłówkiem treningu (##).`); continue; }
+      if (cells.length < 6) {
+        errors.push(`Linia ${i + 1}: wiersz ma ${cells.length} kolumn, potrzeba 8: Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka.`);
+        continue;
+      }
+      const [nameCell, sxr, wCell, tempoCell, restCell, rpeCell, flagCell = '', hintCell = '', videoCell = ''] = cells;
+      const empty = v => v === '' || v === '-' || v === '—';
+
+      let name = nameCell, id;
+      const idm = nameCell.match(/\[([^\]]+)\]\s*$/);
+      if (idm) { id = idm[1]; name = nameCell.slice(0, idm.index).trim(); }
+
+      const sm = sxr.replace('×', 'x').match(/^\s*(\d+)\s*x\s*(.+)$/i);
+      if (!sm) errors.push(`Linia ${i + 1} (${name}): Serie×Powt. musi mieć format "3x10-12", jest: "${sxr}".`);
+
+      let ciezar_kg = null, ciezar_opis;
+      const wNorm = wCell.replace(',', '.').replace(/\s*kg\s*$/i, '').trim();
+      if (!empty(wCell)) {
+        if (/^\d+(\.\d+)?$/.test(wNorm)) ciezar_kg = parseFloat(wNorm);
+        else ciezar_opis = wCell;
+      }
+
+      const restNums = restCell.match(/\d+/g);
+      if (!restNums) errors.push(`Linia ${i + 1} (${name}): Przerwa musi zawierać liczbę sekund, jest: "${restCell}".`);
+      const przerwa_s = restNums ? +restNums[restNums.length - 1] : 0;
+      const przerwa_opis = /^\d+\s*s?$/.test(restCell) ? undefined : restCell;
+
+      const rpe = empty(rpeCell) ? undefined : parseFloat(rpeCell.replace(',', '.'));
+      const flags = flagCell.toLowerCase();
+      let lok = true;
+      if (/\bnie\b|wyklucz/.test(flags)) lok = false;
+      else if (/uwaga|ostrz|łokieć|lokiec|warn/.test(flags)) lok = 'ostrzezenie';
+
+      cur.cwiczenia.push({
+        id, nazwa: name,
+        serie: sm ? +sm[1] : 0,
+        powtorzenia: sm ? sm[2].trim() : sxr,
+        ciezar_kg, ciezar_opis,
+        tempo: empty(tempoCell) ? undefined : tempoCell,
+        przerwa_s, przerwa_opis,
+        rpe_cel: rpe,
+        bezpieczne_dla_lokcia: lok,
+        paski: /pask/.test(flags),
+        opcjonalne: /opcjo/.test(flags),
+        wskazowka: empty(hintCell) ? undefined : hintCell,
+        video: empty(videoCell) ? undefined : videoCell
+      });
+      continue;
+    }
+  }
+  if (!treningi.length) errors.push('Nie znaleziono żadnego treningu. Każdy trening zaczyna się linią "## RRRR-MM-DD | nazwa treningu".');
+  return { obj: { plan_info: info, treningi }, errors };
+}
+
+// Wczytuje plan z tekstu — Markdown (zalecany) albo JSON (też akceptowany).
+function parseTrainerPlanText(txt) {
+  const t = txt.trim();
+  if (t.startsWith('{')) {
+    let obj;
+    try { obj = JSON.parse(t); }
+    catch (e) { return { errors: ['Plik wygląda na JSON, ale nie parsuje się: ' + e.message] }; }
+    return parseTrainerPlan(obj);
+  }
+  const md = parseTrainerPlanMd(t);
+  if (md.errors.length) return { errors: md.errors };
+  return parseTrainerPlan(md.obj);
+}
+
+function trainerTemplateMd() {
+  return `# Plan: Blok treningowy — nazwa/miesiąc
+Trener: Pedro
+Zawodnik: Bartłomiej
+Opis: Cel bloku, np. hipertrofia z ochroną łokcia.
+Uwagi: Notatka ogólna widoczna przy planie.
+Rozgrzewka: 5 min rower/orbitrek; krążenia ramion i bioder 2 min; stretching wyprostników przedramienia 2x30 s; 1 seria rozgrzewkowa 50% ciężaru pierwszego ćwiczenia
+
+## 2026-08-03 | A — nogi + plecy | tydzień 1 | RPE 6
+Uwagi: Opcjonalna notatka do całego treningu.
+Rozgrzewka: Opcjonalna rozgrzewka tylko dla tego treningu (kroki rozdziel średnikiem)
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka | Video |
+|---|---|---|---|---|---|---|---|---|
+| Leg press [leg_press] | 3x10-12 | 60 | 3110 | 120 | 6 | - | Pełny zakres, kontrola opuszczania | https://www.youtube.com/results?search_query=leg+press+technika |
+| Wiosłowanie siedząc, uchwyt neutralny [wioslowanie] | 3x10 | RPE 6 | 3110 | 90 | - | paski, uwaga-łokieć | Maszyna, nie wolna sztanga | - |
+| Hip thrust [hip_thrust] | 3x10 | 50 | 2111 | 120 | - | paski | - | - |
+
+## 2026-08-05 | B — pierś + barki + core | tydzień 1 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Chest press (maszyna) [chest_press] | 3x8-10 | RPE 6 | 2110 | 120 | - | - | - |
+| Shoulder press (maszyna) [shoulder_press] | 3x8-10 | RPE 6 | 2110 | 90-120 | - | - | - |
+| Pallof press [pallof_press] | 3x10/str. | 10 | 2121 | 60 | - | - | - |
+
+## 2026-08-07 | C — nogi (tył) + pchanie | tydzień 1 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Deadlift (lifting straps) [deadlift] | 3x6 | 50 | 2110 | 150 | - | paski | Paski obowiązkowo, zero chwytu bez zabezpieczenia |
+| Chest press (maszyna) [chest_press] | 3x10 | +5% | 2110 | 120 | - | - | Automatyczna progresja +5% od ostatniej sesji |
+| Farmer carry [farmer_carry] | 2x40 m | 2x15 kg | stabilny tułów | 90 | - | paski, uwaga-łokieć, opcjonalne | Obserwuj łokieć 48h po |
+`;
+}
+
+// Gotowy plan powrotu na 4 tygodnie (wt/czw/sob od 21.07.2026) — do wczytania jednym tapnięciem.
+// Tydz. 1–2: Faza 0 (reintroduction, RPE ≤6) · Tydz. 3–4: Faza 1, T1–T2.
+function fourWeekPlanMd() {
+  return `# Plan: Powrót do formy — 4 tygodnie (21.07–15.08.2026)
+Trener: Pedro
+Zawodnik: Bartłomiej
+Opis: Tydz. 1–2: reintroduction full body A/B/C (RPE ≤6). Tydz. 3–4: zmodyfikowany A/B/C, tydzień 1 i 2 mezocyklu.
+Uwagi: Treningi wt/czw/sob. Sobotni możesz zrobić w niedzielę — aplikacja pokaże go jako zaległy 1 dzień, to OK. Minimum 1 dzień przerwy między treningami.
+Rozgrzewka: 5 min rower/orbitrek; krążenia ramion, bioder i nadgarstków 2 min; stretching wyprostników przedramienia 2x30 s; 1 seria rozgrzewkowa 50% ciężaru pierwszego ćwiczenia
+
+## 2026-07-21 | A — nogi + plecy (Faza 0) | tydzień 1 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Leg press [leg_press] | 3x10-12 | 57,5 | 3110 | 120 | - | - | Zacznij lekko, to pierwszy trening po 15 tyg. |
+| Hip thrust [hip_thrust] | 3x10-12 | 47,5 | 2111 | 120 | - | paski | - |
+| Przysiad goblet [goblet_squat] | 3x10 | 12 | 3110 | 90 | - | uwaga-łokieć | Sprawdź komfort łokcia przy trzymaniu hantli |
+| Wyprost nóg (maszyna) [leg_extension] | 3x12 | RPE 6 | 2110 | 90 | - | - | - |
+| Ściąganie wyciągu, V-bar neutralny [lat_pulldown_neutral] | 3x10-12 | 32,5 | 3110 | 90 | - | - | - |
+
+## 2026-07-23 | B — pierś + barki + core (Faza 0) | tydzień 1 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Chest press (maszyna) [chest_press] | 3x10-12 | RPE 6 | 3110 | 120 | - | - | Dobierz ciężar wg RPE — patrz ⓘ przy karcie |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x10-12 | RPE 6 | 2110 | 90-120 | - | - | - |
+| Pallof press [pallof_press] | 3x10/str. | 9 | 2121 | 60 | - | - | - |
+| Face pull (pasy na nadgarstkach) [face_pull_straps] | 3x12-15 | 9 | 2121 | 60-75 | - | paski, uwaga-łokieć | - |
+| Plank / dead bug [plank_deadbug] | 3x30-45 s | - | - | 45 | - | - | - |
+
+## 2026-07-25 | C — nogi (tył) + plecy (grubość) + core (Faza 0) | tydzień 1 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Przysiad z ciężarem na barkach [back_squat_light] | 3x10 | RPE 6 | 3110 | 90 | - | - | Ciężar na barkach, nie w dłoniach |
+| Wiosłowanie siedząc, neutralny uchwyt [seated_row_neutral] | 3x10 | RPE 6 | 3110 | 90 | - | - | - |
+| Wyprost nóg (maszyna) [leg_extension] | 3x12 | RPE 6 | 2110 | 90 | - | - | - |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x8-10 | RPE 6 | 2110 | 90-120 | - | - | - |
+| Pallof press [pallof_press] | 3x10/str. | 9 | 2121 | 60 | - | - | - |
+
+## 2026-07-28 | A — nogi + plecy (Faza 0) | tydzień 2 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Leg press [leg_press] | 3x10-12 | 60 | 3110 | 120 | - | - | Jeśli poprzednie sesje bez bólu — lekko w górę |
+| Hip thrust [hip_thrust] | 3x10-12 | 50 | 2111 | 120 | - | paski | - |
+| Przysiad goblet [goblet_squat] | 3x10 | 12 | 3110 | 90 | - | uwaga-łokieć | - |
+| Wyprost nóg (maszyna) [leg_extension] | 3x12 | RPE 6 | 2110 | 90 | - | - | - |
+| Ściąganie wyciągu, V-bar neutralny [lat_pulldown_neutral] | 3x10-12 | 32,5 | 3110 | 90 | - | - | - |
+
+## 2026-07-30 | B — pierś + barki + core (Faza 0) | tydzień 2 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Chest press (maszyna) [chest_press] | 3x10-12 | RPE 6 | 3110 | 120 | - | - | - |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x10-12 | RPE 6 | 2110 | 90-120 | - | - | - |
+| Pallof press [pallof_press] | 3x10/str. | 9 | 2121 | 60 | - | - | - |
+| Face pull (pasy na nadgarstkach) [face_pull_straps] | 3x12-15 | 9 | 2121 | 60-75 | - | paski, uwaga-łokieć | - |
+| Plank / dead bug [plank_deadbug] | 3x30-45 s | - | - | 45 | - | - | - |
+
+## 2026-08-01 | C — nogi (tył) + plecy (grubość) + core (Faza 0) | tydzień 2 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Przysiad z ciężarem na barkach [back_squat_light] | 3x10 | RPE 6 | 3110 | 90 | - | - | - |
+| Wiosłowanie siedząc, neutralny uchwyt [seated_row_neutral] | 3x10 | RPE 6 | 3110 | 90 | - | - | - |
+| Wyprost nóg (maszyna) [leg_extension] | 3x12 | RPE 6 | 2110 | 90 | - | - | - |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x8-10 | RPE 6 | 2110 | 90-120 | - | - | - |
+| Pallof press [pallof_press] | 3x10/str. | 9 | 2121 | 60 | - | - | - |
+
+## 2026-08-04 | A — nogi + plecy + barki (Faza 1, T1) | tydzień 3 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Ściąganie wyciągu, neutralny uchwyt [lat_pulldown_neutral] | 3x12 | 30 | 3110 | 75-90 | - | - | - |
+| Leg press [leg_press] | 3x10 | 60 | 3110 | 120 | - | - | - |
+| Hip thrust [hip_thrust] | 3x10 | 50 | 2111 | 120 | - | paski | - |
+| Chest press (maszyna) [chest_press] | 3x8 | RPE 6 | 2110 | 120 | - | - | - |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x8 | RPE 6 | 2110 | 90-120 | - | - | - |
+
+## 2026-08-06 | B — plecy + biceps + core (Faza 1, T1) | tydzień 3 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Face pull (pasy na nadgarstkach) [face_pull_straps] | 3x12 | 10 | 2121 | 60-75 | - | paski, uwaga-łokieć | - |
+| Wiosłowanie siedząc, neutralny uchwyt [seated_row_neutral] | 3x10 | RPE 6 | 3110 | 90 | - | - | - |
+| Podciąganie neutralne (asystowane) [pullup_neutral_assisted] | 3xdo RPE 7 | - | - | 120 | 7 | uwaga-łokieć | TYLKO przy 0 bólu łokcia; zostaw 2-3 powt. w zapasie |
+| Biceps curl młotkowy [biceps_curl_hammer] | 2x10 | 6,5 | 3110 | 75 | - | uwaga-łokieć | Lekko! Klasyczny chwyt wykluczony |
+| Pallof press [pallof_press] | 3x10/str. | 10 | 2121 | 45-60 | - | - | - |
+
+## 2026-08-08 | C — nogi (tył) + pchanie (Faza 1, T1) | tydzień 3 | RPE 6
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Deadlift (lifting straps) [deadlift_straps] | 3x6 | 50 | 2110 | 150 | - | paski | Paski obowiązkowo |
+| Split squat (ciężar na barkach) [split_squat] | 3x10/str. | RPE 6 | 3110 | 90 | - | - | Ostrożnie — historia dwugłowego uda |
+| Chest press (maszyna) [chest_press] | 3x10 | RPE 6 | 2110 | 120 | - | - | - |
+| Seal row (maszyna, neutralny) [seal_row] | 3x10 | 12 | 3110 | 90 | - | - | - |
+| Przysiad z ciężarem na barkach [back_squat_light] | 3x10 | RPE 6 | 3110 | 90 | - | - | Zamiast farmer carry |
+
+## 2026-08-11 | A — nogi + plecy + barki (Faza 1, T2) | tydzień 4 | RPE 6,5
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Ściąganie wyciągu, neutralny uchwyt [lat_pulldown_neutral] | 3x13 | 30 | 3110 | 75-90 | - | - | - |
+| Leg press [leg_press] | 3x10 | 65 | 3110 | 120 | - | - | - |
+| Hip thrust [hip_thrust] | 3x11 | 50 | 2111 | 120 | - | paski | - |
+| Chest press (maszyna) [chest_press] | 3x9 | +5% | 2110 | 120 | - | - | +5% względem zeszłego tygodnia, jeśli bez bólu |
+| Shoulder press (maszyna) [shoulder_press_machine] | 3x9 | +5% | 2110 | 90-120 | - | - | - |
+
+## 2026-08-13 | B — plecy + biceps + core (Faza 1, T2) | tydzień 4 | RPE 6,5
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Face pull (pasy na nadgarstkach) [face_pull_straps] | 3x13 | 10 | 2121 | 60-75 | - | paski, uwaga-łokieć | - |
+| Wiosłowanie siedząc, neutralny uchwyt [seated_row_neutral] | 3x11 | ten sam ciężar | 3110 | 90 | - | - | Ciężar z zeszłego tygodnia, +1 powtórzenie |
+| Podciąganie neutralne (asystowane) [pullup_neutral_assisted] | 3xdo RPE 7-8 | - | - | 120 | 7 | uwaga-łokieć | Ostatnia seria bliżej odmowy, tylko przy 0 bólu |
+| Biceps curl młotkowy [biceps_curl_hammer] | 2x12 | 6,5 | 3110 | 75 | - | uwaga-łokieć | - |
+| Pallof press [pallof_press] | 3x10/str. | 10 | 2121 | 45-60 | - | - | - |
+
+## 2026-08-15 | C — nogi (tył) + pchanie (Faza 1, T2) | tydzień 4 | RPE 6,5
+
+| Ćwiczenie | Serie×Powt. | Ciężar | Tempo | Przerwa | RPE | Flagi | Wskazówka |
+|---|---|---|---|---|---|---|---|
+| Deadlift (lifting straps) [deadlift_straps] | 3x7 | 50 | 2110 | 150 | - | paski | Ten sam ciężar, +1 powtórzenie |
+| Split squat (ciężar na barkach) [split_squat] | 3x11/str. | ten sam | 3110 | 90 | - | - | - |
+| Chest press (maszyna) [chest_press] | 3x11 | +5% | 2110 | 120 | - | - | - |
+| Seal row (maszyna, neutralny) [seal_row] | 3x12 | 12 | 3110 | 90 | - | - | - |
+| Przysiad z ciężarem na barkach [back_squat_light] | 3x10 | +5% | 3110 | 90 | - | - | - |
+`;
+}
+
+function plannedDone(w) { return S.sessions.some(s => s.plannedId === w.id); }
+
+// Domyślny trening do pokazania: dzisiejszy niezrobiony → najbliższy przyszły → pierwszy zaległy → ostatni.
+function defaultPlannedWorkout() {
+  const today = todayISO();
+  const undone = S.customPlan.workouts.filter(w => !plannedDone(w));
+  return undone.find(w => w.date === today) || undone.find(w => w.date >= today) || undone[0]
+    || S.customPlan.workouts[S.customPlan.workouts.length - 1];
+}
+
+// Szablon pliku dla trenera — do pobrania z zakładki Plan.
+function trainerTemplate() {
+  return {
+    plan_info: {
+      trener: 'Pedro',
+      zawodnik: 'Bartłomiej',
+      nazwa: 'Blok treningowy — nazwa/miesiąc',
+      opis: 'Cel bloku, np. hipertrofia z ochroną łokcia.',
+      uwagi_ogolne: 'Uwagi widoczne w aplikacji, np. rozgrzewka 10 min przed każdym treningiem.'
+    },
+    treningi: [
+      {
+        data: '2026-08-03',
+        nazwa: 'A — nogi + plecy',
+        tydzien: 1,
+        rpe_cel: 6,
+        uwagi: 'Opcjonalna notatka do całego treningu.',
+        cwiczenia: [
+          {
+            id: 'leg_press',
+            nazwa: 'Leg press',
+            serie: 3,
+            powtorzenia: '10-12',
+            ciezar_kg: 60,
+            tempo: '3110',
+            przerwa_s: 120,
+            rpe_cel: 6,
+            bezpieczne_dla_lokcia: true,
+            paski: false,
+            opcjonalne: false,
+            wskazowka: 'Pełny zakres, kontrola fazy opuszczania.',
+            uwagi: ['3.02.2026: ból pod lewym żebrem — obserwować.']
+          },
+          {
+            id: 'wioslowanie_maszyna',
+            nazwa: 'Wiosłowanie siedząc, uchwyt neutralny',
+            serie: 3,
+            powtorzenia: '10',
+            ciezar_kg: null,
+            ciezar_opis: 'RPE 6 — dobierz na maszynie',
+            tempo: '3110',
+            przerwa_s: 90,
+            bezpieczne_dla_lokcia: 'ostrzezenie',
+            paski: true
+          }
+        ]
+      },
+      {
+        data: '2026-08-05',
+        nazwa: 'B — pierś + barki + core',
+        tydzien: 1,
+        rpe_cel: 6,
+        cwiczenia: [
+          {
+            id: 'chest_press',
+            nazwa: 'Chest press (maszyna)',
+            serie: 3,
+            powtorzenia: '8-10',
+            ciezar_kg: null,
+            ciezar_opis: '+5%',
+            tempo: '2110',
+            przerwa_s: 120
+          },
+          {
+            id: 'farmer_carry',
+            nazwa: 'Farmer carry (z paskami)',
+            serie: 2,
+            powtorzenia: '40 m',
+            ciezar_kg: 15,
+            ciezar_opis: '2x15 kg',
+            tempo: 'stabilny tułów',
+            przerwa_s: 90,
+            bezpieczne_dla_lokcia: 'ostrzezenie',
+            paski: true,
+            opcjonalne: true
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
+  } catch (e) { console.error('load', e); }
+  return defaultState();
+}
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(S)); }
+
+// Zapis pliku na urządzenie. Preferuje window.claude.downloads (działa też w przeglądarkach
+// wbudowanych w aplikacje mobilne, gdzie zwykły <a download> bywa cicho blokowany).
+// Fallback: klasyczny blob + <a download> (dev/localhost, przeglądarki bez tej możliwości).
+function saveFile(filename, text, mime) {
+  mime = mime || 'text/plain';
+  try {
+    const file = new File([text], filename, { type: mime });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: filename }).catch(() => {});
+      return;
+    }
+  } catch (e) { /* Web Share API niedostępne — użyj fallbacku poniżej */ }
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`Zapisano: ${filename}`);
+}
+
+function todayISO(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function fmtDate(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+function fmtKg(w) {
+  if (w == null) return '—';
+  return (Math.round(w * 10) / 10).toString().replace('.', ',') + ' kg';
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function round05(x) { return Math.round(x * 2) / 2; }
+function hoursSince(ts) { return (Date.now() - ts) / 36e5; }
+function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; }
+
+function phaseDef() { return PLAN_DATA.phases[S.plan.phase]; }
+
+// Rejestr ćwiczeń z planu trenera — exDef() szuka najpierw w planie wbudowanym,
+// potem wśród ćwiczeń zdefiniowanych w pliku od trenera.
+let CUSTOM_EX = {};
+function rebuildCustomEx() {
+  CUSTOM_EX = {};
+  if (!S.customPlan) return;
+  for (const w of S.customPlan.workouts) {
+    for (const it of w.items) {
+      if (!CUSTOM_EX[it.ex]) {
+        CUSTOM_EX[it.ex] = {
+          name: it.name,
+          elbowSafe: it.elbowSafe,
+          straps: it.straps,
+          hint: it.hint || null,
+          video: it.video || null,
+          warnings: it.warnings && it.warnings.length ? it.warnings : null
+        };
+      }
+    }
+  }
+}
+function exDef(id) { return PLAN_DATA.exercises[id] || CUSTOM_EX[id] || { name: id }; }
+
+function phaseDays(ph) {
+  const p = PLAN_DATA.phases[ph];
+  if (p.inheritDays != null) {
+    const base = PLAN_DATA.phases[p.inheritDays].days;
+    const out = {};
+    for (const d of Object.keys(base)) {
+      out[d] = { label: base[d].label, items: [...base[d].items, ...((p.extras && p.extras[d]) || [])] };
+    }
+    return out;
+  }
+  return p.days;
+}
+
+function itemTargets(item, week) {
+  if (item.byWeek) {
+    const w = item.byWeek[week] || item.byWeek[1];
+    return { sets: w.sets, reps: w.reps, weight: w.weight, note: w.note || null };
+  }
+  return { sets: item.sets, reps: item.reps, weight: item.weight, note: item.weightLabel || null };
+}
+
+function exHistory(exId) {
+  const out = [];
+  for (const s of S.sessions) {
+    for (const e of s.exercises) {
+      if (e.ex !== exId || !e.sets.length) continue;
+      const weights = e.sets.map(x => x.weight).filter(x => x != null);
+      const rpes = e.sets.map(x => x.rpe).filter(x => x != null);
+      out.push({
+        date: s.date, finishedAt: s.finishedAt, phase: s.phase, week: s.week,
+        maxWeight: weights.length ? Math.max(...weights) : null,
+        maxRpe: rpes.length ? Math.max(...rpes) : null,
+        rpeTarget: e.rpeTarget,
+        maxPainDuring: Math.max(0, ...e.sets.map(x => x.pain ?? 0)),
+        pain24h: e.pain24h
+      });
+    }
+  }
+  out.sort((a, b) => a.date < b.date ? -1 : 1);
+  return out;
+}
+
+function isPaused(exId) {
+  const until = S.paused[exId];
+  return until && until >= todayISO() ? until : null;
+}
+function pauseExercise(exId, days = 7) {
+  const d = new Date(); d.setDate(d.getDate() + days);
+  S.paused[exId] = todayISO(d);
+  save();
+}
+
+function progressionBlocked(exId) {
+  const h = exHistory(exId).filter(x => x.maxRpe != null);
+  if (h.length < 2) return false;
+  const [a, b] = h.slice(-2);
+  return a.maxRpe > a.rpeTarget + 1 && b.maxRpe > b.rpeTarget + 1;
+}
+
+// Silnik progresji. status: 'new' | 'ok' | 'caution' | 'blocked' — steruje kolorem paska na karcie.
+function suggestTarget(item, week) {
+  const exId = item.ex;
+  const t = itemTargets(item, week);
+  const planned = t.weight;
+  const hist = exHistory(exId);
+  const last = hist.length ? hist[hist.length - 1] : null;
+
+  if (!last || last.maxWeight == null) {
+    return { weight: planned, reason: planned != null ? 'wg planu' : (t.note || 'dobierz wg RPE'), status: 'new' };
+  }
+
+  const hadPain = last.maxPainDuring > 2 || (last.pain24h != null && last.pain24h > 2);
+  const anyPain = last.maxPainDuring > 0 || (last.pain24h != null && last.pain24h > 0);
+  const blocked = progressionBlocked(exId);
+  const rpeOk = last.maxRpe == null || last.maxRpe <= last.rpeTarget + 0.5;
+
+  if (hadPain) {
+    return { weight: round05(last.maxWeight * 0.9), reason: 'ból przy ostatniej sesji → −10%', status: 'caution' };
+  }
+  if (blocked) {
+    const w = planned != null ? Math.min(planned, last.maxWeight) : last.maxWeight;
+    return { weight: w, reason: '⛔ progresja zablokowana (RPE > cel+1 przez 2 sesje)', status: 'blocked' };
+  }
+  if (anyPain || !rpeOk) {
+    const w = planned != null ? Math.min(planned, last.maxWeight) : last.maxWeight;
+    return { weight: w, reason: anyPain ? 'zgłoszony ból → bez progresji' : 'RPE powyżej celu → bez progresji', status: 'caution' };
+  }
+
+  if (planned != null) {
+    // Plan trenera: zaplanowany ciężar jest wiążący (może być celowo niższy, np. deload).
+    // Plan wbudowany: nie cofaj się poniżej ostatnio dźwiganego ciężaru.
+    const w = S.customPlan ? planned : Math.max(planned, last.maxWeight);
+    return { weight: w, reason: 'wg planu (kryteria progresji spełnione)', status: 'ok' };
+  }
+  const note = t.note || '';
+  if (week === 4) {
+    const curPhase = S.customPlan ? 'custom' : S.plan.phase;
+    const w1 = hist.filter(h => h.week === 1 && h.phase === curPhase).pop();
+    return { weight: w1 ? w1.maxWeight : round05(last.maxWeight * 0.95), reason: 'deload → poziom T1', status: 'ok' };
+  }
+  if (note.includes('+5%') || note.includes('+obciążenie')) {
+    return { weight: round05(last.maxWeight * 1.05), reason: '+5% (RPE i ból OK)', status: 'ok' };
+  }
+  if (note.includes('+1 kg')) {
+    return { weight: last.maxWeight + 1, reason: '+1 kg (RPE i ból OK)', status: 'ok' };
+  }
+  return { weight: last.maxWeight, reason: 'ten sam ciężar co ostatnio', status: 'ok' };
+}
+
+function suggestedDay() {
+  const rot = phaseDef().rotation;
+  const inPhase = S.sessions.filter(s => s.phase === S.plan.phase);
+  if (!inPhase.length) return rot[0];
+  const lastDay = inPhase[inPhase.length - 1].day;
+  const i = rot.indexOf(lastDay);
+  return rot[(i + 1) % rot.length];
+}
+function lastSessionInfo() {
+  const s = S.sessions[S.sessions.length - 1];
+  if (!s) return null;
+  return { date: s.date, day: s.day, hoursAgo: hoursSince(s.finishedAt || new Date(s.date).getTime()) };
+}
+
+function buildSession(day) {
+  const week = S.plan.week;
+  const items = phaseDays(S.plan.phase)[day].items;
+  const rpeT = phaseDef().rpeTarget[week] ?? 6;
+  return {
+    id: Date.now(),
+    date: todayISO(),
+    startedAt: Date.now(),
+    finishedAt: null,
+    phase: S.plan.phase,
+    week, day,
+    warmup: PLAN_DATA.warmupDefault,
+    warmupDone: [],
+    exercises: items.map((item, i) => {
+      const t = itemTargets(item, week);
+      const sug = suggestTarget(item, week);
+      return {
+        order: i + 1,
+        ex: item.ex,
+        targetSets: t.sets,
+        targetReps: t.reps,
+        targetWeight: sug.weight,
+        targetNote: t.note,
+        suggestReason: sug.reason,
+        suggestStatus: sug.status,
+        tempo: item.tempo,
+        rest: item.rest,
+        restLabel: item.restLabel || item.rest + ' s',
+        rpeTarget: rpeT,
+        optional: !!item.optional,
+        sets: [],
+        pain24h: null,
+        skipped: !!isPaused(item.ex) || !!item.optional
+      };
+    })
+  };
+}
+
+function finishSession() {
+  const s = S.activeSession;
+  if (!s) return;
+  s.finishedAt = Date.now();
+  s.exercises.forEach(e => { if (!e.sets.length) e.skipped = true; });
+  S.sessions.push(s);
+  S.activeSession = null;
+  let msg = '';
+  if (S.customPlan) {
+    const left = S.customPlan.workouts.filter(w => !plannedDone(w)).length;
+    msg = left ? `Trening zapisany. Zostało ${left} treningów z planu.` : 'Wszystkie treningi z planu wykonane! 🎉 Czas na nowy plan od trenera.';
+    save(); stopTimer(); render(true);
+    toast(msg, 5000);
+    return;
+  }
+  const p = phaseDef();
+  const done = S.sessions.filter(x => x.phase === S.plan.phase && x.week === S.plan.week).length;
+  if (done >= p.sessionsPerWeek) {
+    if (S.plan.week < p.weeks) {
+      S.plan.week++;
+      msg = `Tydzień ukończony! Przechodzisz do tygodnia ${S.plan.week} (${p.rpeLabel[S.plan.week]}).`;
+    } else if (p.id === 0) {
+      msg = 'Faza 0 skompletowana — sprawdź kryteria przejścia do Fazy 1 w zakładce Plan.';
+    } else {
+      S.plan.week = 1;
+      msg = 'Mezocykl ukończony! Nowy mezocykl — tydzień 1 (RPE 6). Ciężary bazują na Twoich ostatnich wynikach.';
+    }
+  }
+  save();
+  stopTimer();
+  render(true);
+  if (msg) toast(msg, 6000);
+}
+
+function pendingFollowUps() {
+  return S.sessions.filter(s =>
+    s.finishedAt && hoursSince(s.finishedAt) >= 20 && hoursSince(s.finishedAt) <= 24 * 7 &&
+    s.exercises.some(e => e.sets.length && e.pain24h == null)
+  );
+}
+
+// ---------------- Timer przerwy (wizualny — bez dźwięku/wibracji/powiadomień) ----------------
+const timer = { endsAt: null, exName: '', iv: null };
+
+function startTimer(seconds, exName) {
+  timer.endsAt = Date.now() + seconds * 1000;
+  timer.exName = exName;
+  clearInterval(timer.iv);
+  timer.iv = setInterval(tickTimer, 250);
+  document.getElementById('rest-timer').classList.remove('hidden');
+  tickTimer();
+}
+function stopTimer() {
+  clearInterval(timer.iv);
+  timer.endsAt = null;
+  document.getElementById('rest-timer').classList.add('hidden');
+  document.getElementById('rest-timer').classList.remove('rt-done');
+}
+function tickTimer() {
+  if (!timer.endsAt) return;
+  const left = Math.ceil((timer.endsAt - Date.now()) / 1000);
+  const box = document.getElementById('rest-timer');
+  box.querySelector('.rt-ex').textContent = timer.exName;
+  if (left <= 0) {
+    box.querySelector('.rt-time').textContent = '0:00';
+    box.classList.add('rt-done');
+    box.querySelector('.rt-label').textContent = 'Koniec przerwy — dawaj!';
+    clearInterval(timer.iv);
+    setTimeout(stopTimer, 8000);
+    return;
+  }
+  box.querySelector('.rt-label').textContent = 'Przerwa';
+  box.querySelector('.rt-time').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+}
+document.getElementById('rest-timer').addEventListener('click', e => {
+  const b = e.target.closest('[data-rt]'); if (!b) return;
+  const v = b.dataset.rt;
+  if (v === 'skip') stopTimer();
+  else if (timer.endsAt) { timer.endsAt += (v === '+15' ? 15000 : -15000); tickTimer(); }
+});
+
+function showModal(html) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
+  root.querySelector('.modal-bg').addEventListener('click', e => { if (e.target.classList.contains('modal-bg')) closeModal(); });
+  return root.querySelector('.modal');
+}
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
+function toast(msg, ms = 3500) {
+  const t = el(`<div class="toast">${esc(msg)}</div>`);
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 20);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, ms);
+}
+
+let currentTab = 'workout';
+const view = document.getElementById('view');
+
+// resetScroll=true → nowy "ekran" (zmiana zakładki, wybór dnia, start/koniec treningu): wróć na górę.
+// resetScroll=false (domyślnie) → drobna aktualizacja w miejscu (zapis serii, checkbox, pole): zostań tam, gdzie był użytkownik.
+function render(resetScroll) {
+  const prevScroll = window.scrollY;
+  document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
+  updateTopbar();
+  updateRehabBadge();
+  ({ workout: renderWorkout, history: renderHistory, nutrition: renderNutrition, rehab: renderRehab, plan: renderPlan })[currentTab]();
+  window.scrollTo(0, resetScroll ? 0 : prevScroll);
+}
+document.getElementById('tabbar').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  currentTab = t.dataset.tab; render(true);
+});
+
+function updateTopbar() {
+  if (S.customPlan) {
+    const total = S.customPlan.workouts.length;
+    const done = S.customPlan.workouts.filter(plannedDone).length;
+    document.getElementById('topbar-meta').textContent =
+      `${S.customPlan.meta.nazwa} · ${done}/${total} treningów`;
+    return;
+  }
+  const p = phaseDef();
+  document.getElementById('topbar-meta').textContent =
+    `Faza ${p.id} · Tydzień ${S.plan.week}/${p.weeks} · ${p.rpeLabel[S.plan.week] || ''}`;
+}
+function updateRehabBadge() {
+  const r = S.rehab[todayISO()];
+  const done = r && r.eccentric && r.stretching;
+  document.getElementById('rehab-badge').classList.toggle('hidden', !!done);
+}
+
+function exBadges(exId, item) {
+  const d = exDef(exId);
+  let b = '';
+  if (d.straps) b += `<span class="chip chip-straps">🔒 paski</span>`;
+  if (d.elbowSafe === 'warn') b += `<span class="chip chip-warn">⚠️ łokieć</span>`;
+  if (d.elbowSafe === false) b += `<span class="chip chip-warn">🚫 wykluczone dla łokcia</span>`;
+  if (d.hint) b += `<span class="chip chip-hint" data-hint="${esc(exId)}">💡</span>`;
+  if (d.desc || d.video) b += `<span class="chip chip-hint" data-hint="${esc(exId)}">🎥 jak robić?</span>`;
+  if (d.warnings) b += `<span class="chip chip-hist" data-hint="${esc(exId)}">📋 historia</span>`;
+  if (item && item.optional) b += `<span class="chip">opcjonalne</span>`;
+  return b;
+}
+function hintModal(exId) {
+  const d = exDef(exId);
+  let html = `<h3>${esc(d.name)}</h3>`;
+  if (d.desc) html += `<p>${esc(d.desc)}</p>`;
+  if (d.hint) html += `<p class="hint-line">💡 ${esc(d.hint)}</p>`;
+  if (d.warnings) html += d.warnings.map(w => `<p class="warn-line">📋 ${esc(w)}</p>`).join('');
+  if (d.preBreak) html += `<p class="muted">Przed przerwą (I–IV 2026): ${esc(d.preBreak)}</p>`;
+  if (d.video) html += `<a class="btn btn-full video-btn" href="${esc(d.video)}" target="_blank" rel="noopener">🎥 Zobacz na YouTube, jak to wykonać</a>`;
+  html += `<button class="btn btn-full" onclick="closeModal()">OK</button>`;
+  showModal(html);
+}
+
+// Wyjaśnienie skali RPE + jak dobrać ciężar pierwszy raz na maszynie
+function rpeInfoModal() {
+  showModal(`<h3>Co to jest RPE?</h3>
+    <p>RPE (1–10) mówi, <b>jak ciężka była seria</b> — najprościej: ile powtórzeń zostało Ci „w zapasie" na końcu serii.</p>
+    <table class="tbl">
+      <tr><th>RPE</th><th>Znaczenie</th></tr>
+      <tr><td><b>6</b></td><td>lekko — zostały ~4 powtórzenia w zapasie</td></tr>
+      <tr><td><b>7</b></td><td>średnio — zostały ~3 powtórzenia</td></tr>
+      <tr><td><b>8</b></td><td>ciężko — zostały ~2 powtórzenia</td></tr>
+      <tr><td><b>9</b></td><td>bardzo ciężko — zostało 1 powtórzenie</td></tr>
+      <tr><td><b>10</b></td><td>maks — nie zrobisz ani jednego więcej</td></tr>
+    </table>
+    <h3 style="margin-top:14px">Jak dobrać ciężar, gdy napisane jest tylko „RPE 6"?</h3>
+    <p>1. Ustaw ciężar, który wygląda na <b>zdecydowanie za lekki</b>, i zrób serię docelowych powtórzeń.</p>
+    <p>2. Po serii zadaj sobie pytanie: „ile jeszcze bym zrobił?". Jeśli więcej niż 4–5 → w następnej serii dodaj 5–10% (na maszynie: 1 płytka).</p>
+    <p>3. Gdy czujesz, że w zapasie zostały ~4 powtórzenia — to jest Twój ciężar na RPE 6. Zapisz serię w aplikacji, a przy następnym treningu aplikacja <b>sama zaproponuje ciężar</b> na podstawie tego, co zalogowałeś.</p>
+    <p class="muted">W trakcie powrotu po kontuzji lepiej strzelić za lekko niż za ciężko — progresja i tak przyjdzie.</p>
+    <button class="btn btn-full" onclick="closeModal()">Rozumiem</button>`);
+}
+
+document.body.addEventListener('click', e => {
+  if (e.target.closest('[data-rpe-info]')) { rpeInfoModal(); return; }
+  const h = e.target.closest('[data-hint]');
+  if (h) hintModal(h.dataset.hint);
+});
+
+// ---------------- WIDOK: Trening ----------------
+function commonBanners() {
+  let html = '';
+  for (const s of pendingFollowUps()) html += followUpCard(s);
+  const last = lastSessionInfo();
+  if (last && last.hoursAgo < 48) {
+    html += `<div class="banner banner-warn">⏱️ Ostatni trening (${esc(last.day)}, ${fmtDate(last.date)}) był ${Math.round(last.hoursAgo)} h temu.
+      Minimum 48 h regeneracji dla tej samej grupy mięśniowej — rozważ przesunięcie sesji.</div>`;
+  }
+  const r = S.rehab[todayISO()];
+  if (!(r && r.eccentric)) {
+    html += `<div class="banner banner-info" onclick="currentTab='rehab';render()">💪 Pamiętaj o dzisiejszym rehabie łokcia (ekscentryka + stretching) →</div>`;
+  }
+  return html;
+}
+
+// Karta rozgrzewki: w podglądzie zwykła lista, w aktywnej sesji z odhaczaniem.
+function warmupCard(steps, interactive) {
+  if (!steps || !steps.length) return '';
+  const s = S.activeSession;
+  const rows = steps.map((step, i) => interactive
+    ? `<label class="warmup-step ${s.warmupDone && s.warmupDone[i] ? 'done' : ''}">
+         <input type="checkbox" data-warmup-i="${i}" ${s.warmupDone && s.warmupDone[i] ? 'checked' : ''}><span>${esc(step)}</span></label>`
+    : `<div class="warmup-step"><span>• ${esc(step)}</span></div>`).join('');
+  return `<details class="card warmup-card" ${interactive ? 'open' : ''}>
+    <summary>🔥 Rozgrzewka (5–10 min, zawsze przed treningiem)</summary>${rows}</details>`;
+}
+function bindWarmup() {
+  view.querySelectorAll('[data-warmup-i]').forEach(c => c.addEventListener('change', () => {
+    const s = S.activeSession;
+    if (!s.warmupDone) s.warmupDone = [];
+    s.warmupDone[+c.dataset.warmupI] = c.checked;
+    save();
+    c.closest('.warmup-step').classList.toggle('done', c.checked);
+  }));
+}
+
+function exPreviewCard(item, week) {
+  const t = itemTargets(item, week);
+  const sug = suggestTarget(item, week);
+  const d = exDef(item.ex);
+  const paused = isPaused(item.ex);
+  const stCls = paused ? 'ex-paused st-stop' : `st-${sug.status}`;
+  return `<div class="ex-card ${stCls}">
+    <div class="ex-head">
+      <div class="ex-name">${esc(d.name)}</div>
+      <div class="ex-badges">${exBadges(item.ex, item)}</div>
+    </div>
+    ${paused ? `<div class="paused-line">⛔ Wstrzymane do ${fmtDate(paused)} (ból łokcia) <button class="link-btn" data-unpause="${esc(item.ex)}">przywróć</button></div>` : ''}
+    <div class="ex-targets">
+      <span class="tgt-main">${t.sets} × ${esc(t.reps)}</span>
+      <span class="tgt-weight">${sug.weight != null ? fmtKg(sug.weight) : esc(t.note || 'wg RPE')}</span>
+    </div>
+    <div class="ex-sub">tempo ${esc(item.tempo)} · przerwa ${esc(item.restLabel || item.rest + ' s')} · ${esc(sug.reason)}${item.hint ? ' · 💡 ' + esc(item.hint) : ''}</div>
+    ${sug.weight == null && /rpe/i.test(String(t.note || '')) ? `<button class="rpe-q rpe-q-card" data-rpe-info>ⓘ Co znaczy RPE i jaki ciężar wziąć?</button>` : ''}
+  </div>`;
+}
+
+function bindUnpause() {
+  view.querySelectorAll('[data-unpause]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const ex = b.dataset.unpause;
+    showModal(`<h3>Przywrócić ćwiczenie?</h3>
+      <p>${esc(exDef(ex).name)} zostało wstrzymane po zgłoszeniu bólu >2/10. Zalecany pełny tydzień przerwy. Kryterium powrotu: 0/10 bólu.</p>
+      <div class="modal-btns">
+        <button class="btn" onclick="closeModal()">Zostaw wstrzymane</button>
+        <button class="btn btn-danger" id="m-unpause">Przywróć mimo to</button>
+      </div>`);
+    document.getElementById('m-unpause').onclick = () => { delete S.paused[ex]; save(); closeModal(); render(); };
+  }));
+}
+
+// Widok startowy dla planu od trenera: wybór zaplanowanego treningu po dacie.
+function renderCustomWorkoutHome() {
+  const plan = S.customPlan;
+  const pickedId = +view.dataset.pickedWorkout;
+  const w = plan.workouts.find(x => x.id === pickedId) || defaultPlannedWorkout();
+  const today = todayISO();
+
+  let html = commonBanners();
+
+  html += `<select id="cw-sel" class="select-full">${plan.workouts.map(x =>
+    `<option value="${x.id}" ${x.id === w.id ? 'selected' : ''}>${fmtDate(x.date)} · ${esc(x.name)}${plannedDone(x) ? ' ✓' : ''}</option>`
+  ).join('')}</select>`;
+
+  const doneW = plannedDone(w);
+  if (doneW) html += `<div class="banner banner-info">✓ Ten trening został już wykonany — możesz go powtórzyć, zapisze się jako kolejna sesja.</div>`;
+  else if (w.date > today) html += `<div class="banner banner-info">📅 Ten trening jest zaplanowany na ${fmtDate(w.date)}.</div>`;
+  else if (w.date < today) html += `<div class="banner banner-warn">📅 Trening zaległy — planowany na ${fmtDate(w.date)}.</div>`;
+
+  html += `<div class="day-label">${esc(w.name)}${w.rpeTarget ? ` · cel RPE ${w.rpeTarget}` : ''}${w.week ? ` · tydz. ${w.week}` : ''}</div>`;
+  if (w.notes) html += `<div class="banner banner-info">📝 ${esc(w.notes)}</div>`;
+
+  html += warmupCard(w.warmup || PLAN_DATA.warmupDefault, false);
+  html += w.items.map(item => exPreviewCard(item, w.week || 0)).join('');
+  html += `<button class="btn btn-primary btn-full btn-big" id="start-workout">▶ Rozpocznij: ${esc(w.name)}</button>`;
+
+  view.innerHTML = html;
+  document.getElementById('cw-sel').addEventListener('change', ev => { view.dataset.pickedWorkout = ev.target.value; render(true); });
+  bindUnpause();
+  document.getElementById('start-workout').addEventListener('click', () => {
+    S.activeSession = buildSessionCustom(w);
+    delete view.dataset.pickedWorkout;
+    save(); render(true);
+  });
+}
+
+function buildSessionCustom(w) {
+  return {
+    id: Date.now(),
+    date: todayISO(),
+    startedAt: Date.now(),
+    finishedAt: null,
+    phase: 'custom',
+    week: w.week || 1,
+    day: w.name,
+    plannedId: w.id,
+    plannedDate: w.date,
+    rpeLabelCustom: w.rpeTarget ? `RPE ${w.rpeTarget}` : '',
+    warmup: w.warmup || PLAN_DATA.warmupDefault,
+    warmupDone: [],
+    exercises: w.items.map((item, i) => {
+      const t = itemTargets(item, w.week || 0);
+      const sug = suggestTarget(item, w.week || 0);
+      return {
+        order: i + 1,
+        ex: item.ex,
+        targetSets: t.sets,
+        targetReps: t.reps,
+        targetWeight: sug.weight,
+        targetNote: t.note,
+        suggestReason: sug.reason,
+        suggestStatus: sug.status,
+        tempo: item.tempo,
+        rest: item.rest,
+        restLabel: item.restLabel || item.rest + ' s',
+        rpeTarget: item.rpeTarget ?? w.rpeTarget ?? 6,
+        optional: !!item.optional,
+        sets: [],
+        pain24h: null,
+        skipped: !!isPaused(item.ex) || !!item.optional
+      };
+    })
+  };
+}
+
+function renderWorkout() {
+  if (S.activeSession) { renderActiveSession(); return; }
+  if (S.customPlan) { renderCustomWorkoutHome(); return; }
+
+  const day = view.dataset.pickedDay && phaseDays(S.plan.phase)[view.dataset.pickedDay] ? view.dataset.pickedDay : suggestedDay();
+  const days = phaseDays(S.plan.phase);
+  const week = S.plan.week;
+
+  let html = commonBanners();
+
+  html += `<div class="day-picker">` + Object.keys(days).map(d =>
+    `<button class="day-btn ${d === day ? 'active' : ''}" data-day="${d}">${d}${d === suggestedDay() ? '<span class="day-sug">nast.</span>' : ''}</button>`
+  ).join('') + `</div>`;
+
+  html += `<div class="day-label">${esc(days[day].label)}</div>`;
+  html += warmupCard(PLAN_DATA.warmupDefault, false);
+  html += days[day].items.map(item => exPreviewCard(item, week)).join('');
+  html += `<button class="btn btn-primary btn-full btn-big" id="start-workout">▶ Rozpocznij trening ${day}</button>`;
+
+  view.innerHTML = html;
+  view.querySelectorAll('.day-btn').forEach(b => b.addEventListener('click', () => { view.dataset.pickedDay = b.dataset.day; render(true); }));
+  bindUnpause();
+  document.getElementById('start-workout').addEventListener('click', () => {
+    S.activeSession = buildSession(day);
+    delete view.dataset.pickedDay;
+    save(); render(true);
+  });
+}
+
+function followUpCard(s) {
+  const items = s.exercises.filter(e => e.sets.length && e.pain24h == null);
+  return `<div class="card followup" data-fu="${s.id}">
+    <div class="fu-title">🕐 Jak łokieć 24h po treningu ${esc(s.day)} z ${fmtDate(s.date)}?</div>
+    ${items.map(e => `<div class="fu-row">
+      <div class="fu-ex">${esc(exDef(e.ex).name)}</div>
+      <div class="pain-chips" data-fu-ex="${esc(e.ex)}">${[0,1,2,3,4,5,6,7,8,9,10].map(p =>
+        `<button class="pchip p${p >= 3 ? 'hi' : p > 0 ? 'mid' : 'lo'}" data-fu-session="${s.id}" data-fu-exid="${esc(e.ex)}" data-pain="${p}">${p}</button>`).join('')}
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+document.body.addEventListener('click', e => {
+  const b = e.target.closest('[data-fu-session]');
+  if (!b) return;
+  const s = S.sessions.find(x => x.id === +b.dataset.fuSession);
+  const ex = s && s.exercises.find(x => x.ex === b.dataset.fuExid);
+  if (!ex) return;
+  ex.pain24h = +b.dataset.pain;
+  if (ex.pain24h > 2) {
+    pauseExercise(ex.ex, 7);
+    toast(`⛔ ${exDef(ex.ex).name}: ból ${ex.pain24h}/10 → wstrzymane na 7 dni.`, 5000);
+  }
+  save(); render();
+});
+
+// ---------------- WIDOK: aktywna sesja ----------------
+function renderActiveSession() {
+  const s = S.activeSession;
+  const doneSets = s.exercises.reduce((a, e) => a + e.sets.length, 0);
+  const allSets = s.exercises.filter(e => !e.skipped).reduce((a, e) => a + e.targetSets, 0);
+
+  const headInfo = s.phase === 'custom'
+    ? `<b>${esc(s.day)}</b> · plan trenera${s.rpeLabelCustom ? ' · cel ' + esc(s.rpeLabelCustom) : ''}`
+    : `Dzień <b>${esc(s.day)}</b> · Faza ${s.phase} · Tydz. ${s.week} · cel ${esc(phaseDef().rpeLabel[s.week] || '')}`;
+  let html = `<div class="session-head">
+    <div>${headInfo}</div>
+    <div class="session-progress">${doneSets}/${allSets} serii</div>
+  </div>`;
+
+  html += warmupCard(s.warmup, true);
+  html += s.exercises.map((e, ei) => renderExerciseCard(e, ei)).join('');
+  html += `<button class="btn btn-primary btn-full btn-big" id="finish-workout">✔ Zakończ trening</button>
+    <button class="btn btn-full btn-ghost" id="cancel-workout">Anuluj (bez zapisu)</button>`;
+
+  view.innerHTML = html;
+
+  bindWarmup();
+  view.querySelectorAll('[data-log-ei]').forEach(btn => btn.addEventListener('click', () => logSet(+btn.dataset.logEi)));
+  view.querySelectorAll('[data-skip-ei]').forEach(btn => btn.addEventListener('click', () => {
+    const e = s.exercises[+btn.dataset.skipEi];
+    e.skipped = !e.skipped; save(); render();
+  }));
+  view.querySelectorAll('.stepper button').forEach(b => b.addEventListener('click', () => {
+    const inp = b.parentElement.querySelector('input');
+    inp.value = Math.max(0, round05((+inp.value || 0) + +b.dataset.step)).toString();
+  }));
+  view.querySelectorAll('.rpe-chips .pchip, .pain-row .pchip').forEach(b => b.addEventListener('click', () => {
+    b.parentElement.querySelectorAll('.pchip').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+  }));
+  document.getElementById('finish-workout').addEventListener('click', () => {
+    const unlogged = s.exercises.filter(e => !e.skipped && e.sets.length < e.targetSets).length;
+    showModal(`<h3>Zakończyć trening?</h3>
+      ${unlogged ? `<p>${unlogged} ćwicz. ma niezalogowane serie — zostaną zapisane jako wykonane częściowo.</p>` : '<p>Wszystkie serie zalogowane. 💪</p>'}
+      <p class="muted">Za ~24h aplikacja poprosi o ocenę bólu łokcia po tym treningu.</p>
+      <div class="modal-btns">
+        <button class="btn" onclick="closeModal()">Wróć</button>
+        <button class="btn btn-primary" id="m-finish">Zakończ</button>
+      </div>`);
+    document.getElementById('m-finish').onclick = () => { closeModal(); finishSession(); };
+  });
+  document.getElementById('cancel-workout').addEventListener('click', () => {
+    showModal(`<h3>Anulować trening?</h3><p>Zalogowane serie z tej sesji zostaną usunięte.</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn btn-danger" id="m-cancel">Anuluj trening</button></div>`);
+    document.getElementById('m-cancel').onclick = () => { S.activeSession = null; save(); stopTimer(); closeModal(); render(true); };
+  });
+}
+
+function renderExerciseCard(e, ei) {
+  const d = exDef(e.ex);
+  const done = e.sets.length >= e.targetSets;
+  const paused = isPaused(e.ex);
+  const nextSet = e.sets.length + 1;
+  const stCls = e.skipped ? 'st-stop' : (done ? 'st-done' : `st-${e.suggestStatus || 'new'}`);
+
+  let setsHtml = e.sets.map((st, i) =>
+    `<div class="set-done">
+      <span class="set-no">S${i + 1}</span>
+      <span>${st.reps} powt.</span>
+      <span>${st.weight != null ? fmtKg(st.weight) : 'BW'}</span>
+      <span>RPE ${st.rpe ?? '—'}</span>
+      <span class="${st.pain > 2 ? 'pain-hi' : st.pain > 0 ? 'pain-mid' : 'pain-lo'}">ból ${st.pain}</span>
+    </div>`).join('');
+
+  let inputHtml = '';
+  if (!done && !e.skipped) {
+    const defReps = parseInt(e.targetReps) || '';
+    const defW = e.targetWeight != null ? e.targetWeight : '';
+    inputHtml = `<div class="set-input" data-ei="${ei}">
+      <div class="set-input-title">Seria ${nextSet}/${e.targetSets}</div>
+      <div class="si-row">
+        <div class="si-field"><label>Powtórzenia</label>
+          <div class="stepper"><button data-step="-1">−</button><input type="number" inputmode="numeric" class="in-reps" value="${defReps}"><button data-step="1">+</button></div>
+        </div>
+        <div class="si-field"><label>Ciężar (kg)</label>
+          <div class="stepper"><button data-step="-2.5">−</button><input type="number" inputmode="decimal" step="0.5" class="in-weight" value="${defW}"><button data-step="2.5">+</button></div>
+        </div>
+      </div>
+      <div class="si-field"><label>RPE (cel ${e.rpeTarget}) <button class="rpe-q" data-rpe-info>ⓘ co to?</button></label>
+        <div class="rpe-chips">${[5,6,7,8,9,10].map(r => `<button class="pchip ${r <= e.rpeTarget ? 'plo' : r <= e.rpeTarget + 1 ? 'pmid' : 'phi'}" data-rpe="${r}">${r}</button>`).join('')}</div>
+      </div>
+      <div class="si-field pain-row"><label>Ból łokcia (0–10)</label>
+        <div class="pain-chips">${[0,1,2,3,4,5,6,7,8,9,10].map(p => `<button class="pchip ${p === 0 ? 'sel' : ''} ${p >= 3 ? 'phi' : p > 0 ? 'pmid' : 'plo'}" data-pain="${p}">${p}</button>`).join('')}</div>
+      </div>
+      <button class="btn btn-primary btn-full" data-log-ei="${ei}">✓ Zapisz serię ${nextSet} → przerwa ${esc(e.restLabel)}</button>
+    </div>`;
+  }
+
+  return `<div class="ex-card ${stCls} ${e.skipped ? 'ex-paused' : ''}">
+    <div class="ex-head">
+      <div class="ex-name">${e.order}. ${esc(d.name)} ${done ? '✅' : ''}</div>
+      <div class="ex-badges">${exBadges(e.ex)}</div>
+    </div>
+    ${paused && !e.skipped ? `<div class="paused-line">⚠️ To ćwiczenie jest wstrzymane (ból) do ${fmtDate(paused)}!</div>` : ''}
+    <div class="ex-targets">
+      <span class="tgt-main">${e.targetSets} × ${esc(e.targetReps)}</span>
+      <span class="tgt-weight">${e.targetWeight != null ? fmtKg(e.targetWeight) : esc(e.targetNote || 'wg RPE')}</span>
+    </div>
+    <div class="ex-sub">tempo ${esc(e.tempo)} · przerwa ${esc(e.restLabel)} · RPE cel ${e.rpeTarget}${e.suggestReason ? ' · ' + esc(e.suggestReason) : ''}</div>
+    ${d.straps ? `<div class="straps-note">🔒 Użyj pasków (lifting straps) — zero obciążonego chwytu.</div>` : ''}
+    ${setsHtml}
+    ${inputHtml}
+    ${!done ? `<button class="link-btn skip-link" data-skip-ei="${ei}">${e.skipped ? '↩ Przywróć ćwiczenie' : 'Pomiń ćwiczenie'}</button>` : ''}
+  </div>`;
+}
+
+function logSet(ei) {
+  const s = S.activeSession;
+  const e = s.exercises[ei];
+  const box = view.querySelector(`.set-input[data-ei="${ei}"]`);
+  const reps = parseInt(box.querySelector('.in-reps').value);
+  const wRaw = box.querySelector('.in-weight').value;
+  const weight = wRaw === '' ? null : parseFloat(wRaw);
+  const rpeBtn = box.querySelector('.rpe-chips .sel');
+  const painBtn = box.querySelector('.pain-chips .sel');
+  const rpe = rpeBtn ? +rpeBtn.dataset.rpe : null;
+  const pain = painBtn ? +painBtn.dataset.pain : 0;
+
+  if (!reps || reps < 1) { toast('Podaj liczbę powtórzeń.'); return; }
+  if (rpe == null) { toast('Zaznacz RPE serii (potrzebne do progresji).'); return; }
+
+  e.sets.push({ reps, weight, rpe, pain, t: Date.now() });
+  save();
+
+  if (pain > 2) {
+    showModal(`<h3>⛔ Ból ${pain}/10 — zatrzymaj się</h3>
+      <p>Kryterium bezpieczeństwa: ból >2/10 = wypadnij z ćwiczenia na tydzień. Nie „przeczekujemy" bólu łokcia.</p>
+      <div class="modal-btns">
+        <button class="btn btn-danger btn-full" id="m-pause">Wstrzymaj ${esc(exDef(e.ex).name)} na 7 dni i pomiń</button>
+        <button class="btn btn-full" id="m-cont">Kontynuuję świadomie (niezalecane)</button>
+      </div>`);
+    document.getElementById('m-pause').onclick = () => {
+      pauseExercise(e.ex, 7); e.skipped = true; save(); closeModal(); render();
+      toast('Ćwiczenie wstrzymane na 7 dni. Dbaj o łokieć. 🧊');
+    };
+    document.getElementById('m-cont').onclick = () => { closeModal(); startTimer(e.rest, exDef(e.ex).name); render(); };
+    return;
+  }
+  startTimer(e.rest, exDef(e.ex).name);
+  render();
+}
+
+// ---------------- WIDOK: Historia ----------------
+// Czytelny eksport tekstowy całej historii ćwiczeń — do wysłania sobie/trenerowi albo otwarcia w dowolnym edytorze.
+function historyExportText() {
+  if (!S.sessions.length) return 'Brak zapisanych treningów.';
+  const lines = [`TRENING — eksport historii (${todayISO()}), ${S.sessions.length} sesji`, ''];
+  for (const s of S.sessions) {
+    lines.push(`== ${fmtDate(s.date)} · ${s.day} ${s.phase === 'custom' ? '(plan trenera)' : `(Faza ${s.phase}, tydz. ${s.week})`} ==`);
+    for (const e of s.exercises) {
+      if (e.skipped && !e.sets.length) { lines.push(`  ${exDef(e.ex).name}: pominięte`); continue; }
+      const setsStr = e.sets.map(x => `${x.reps}×${x.weight != null ? fmtKg(x.weight) : 'BW'} @RPE${x.rpe ?? '?'}${x.pain > 0 ? ` ból${x.pain}` : ''}`).join(', ');
+      lines.push(`  ${exDef(e.ex).name}: ${setsStr}${e.pain24h != null ? ` [24h: ból ${e.pain24h}/10]` : ''}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function renderHistory() {
+  let html = '';
+  for (const s of pendingFollowUps()) html += followUpCard(s);
+
+  const loggedEx = [...new Set(S.sessions.flatMap(s => s.exercises.filter(e => e.sets.length && e.sets.some(x => x.weight != null)).map(e => e.ex)))];
+  if (loggedEx.length) {
+    const sel = view.dataset.chartEx && loggedEx.includes(view.dataset.chartEx) ? view.dataset.chartEx : loggedEx[0];
+    html += `<div class="card">
+      <h3>📈 Progresja obciążenia</h3>
+      <select id="chart-ex" class="select-full">${loggedEx.map(x => `<option value="${esc(x)}" ${x === sel ? 'selected' : ''}>${esc(exDef(x).name)}</option>`).join('')}</select>
+      ${buildChart(sel)}
+      <div class="muted chart-legend">● ciężar max w sesji · <span class="pain-hi">●</span> sesja z bólem >2</div>
+    </div>`;
+  }
+
+  if (!S.sessions.length) {
+    html += `<div class="card empty">Brak zapisanych treningów. Pierwsza sesja przed Tobą! 💪</div>`;
+  } else {
+    html += `<button class="btn btn-full" id="btn-hist-export">⬇ Eksportuj historię ćwiczeń (.txt)</button>`;
+    html += `<h3 class="sec-title">Sesje (${S.sessions.length})</h3>`;
+    html += [...S.sessions].reverse().map(s => {
+      const vol = s.exercises.reduce((a, e) => a + e.sets.reduce((b, x) => b + (x.weight || 0) * x.reps, 0), 0);
+      const maxPain = Math.max(0, ...s.exercises.flatMap(e => [...e.sets.map(x => x.pain || 0), e.pain24h || 0]));
+      return `<details class="card session-card">
+        <summary>
+          <b>${esc(s.day)}</b> · ${fmtDate(s.date)} · ${s.phase === 'custom' ? 'plan trenera' : `F${s.phase}/T${s.week}`}
+          <span class="muted"> · ${Math.round(vol)} kg obj.</span>
+          ${maxPain > 2 ? '<span class="pain-hi"> · ból!</span>' : ''}
+        </summary>
+        ${s.exercises.map(e => e.skipped && !e.sets.length
+          ? `<div class="hist-ex muted">— ${esc(exDef(e.ex).name)}: pominięte</div>`
+          : `<div class="hist-ex"><b>${esc(exDef(e.ex).name)}</b><br>
+             ${e.sets.map(x => `${x.reps}×${x.weight != null ? fmtKg(x.weight) : 'BW'} @RPE${x.rpe ?? '?'}${x.pain > 0 ? ` <span class="${x.pain > 2 ? 'pain-hi' : 'pain-mid'}">ból ${x.pain}</span>` : ''}`).join(' · ')}
+             ${e.pain24h != null ? `<span class="muted"> · 24h: ból ${e.pain24h}/10</span>` : ''}</div>`
+        ).join('')}
+        <button class="link-btn" data-del-session="${s.id}">Usuń sesję</button>
+      </details>`;
+    }).join('');
+  }
+
+  view.innerHTML = html;
+  const chartSel = document.getElementById('chart-ex');
+  if (chartSel) chartSel.addEventListener('change', () => { view.dataset.chartEx = chartSel.value; render(); });
+  const histExp = document.getElementById('btn-hist-export');
+  if (histExp) histExp.addEventListener('click', () => {
+    saveFile(`historia-cwiczen-${todayISO()}.txt`, historyExportText(), 'text/plain');
+  });
+  view.querySelectorAll('[data-del-session]').forEach(b => b.addEventListener('click', () => {
+    showModal(`<h3>Usunąć sesję?</h3><p>Tej operacji nie można cofnąć.</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn btn-danger" id="m-del">Usuń</button></div>`);
+    document.getElementById('m-del').onclick = () => {
+      S.sessions = S.sessions.filter(x => x.id !== +b.dataset.delSession);
+      save(); closeModal(); render();
+    };
+  }));
+}
+
+function buildChart(exId) {
+  const h = exHistory(exId).filter(x => x.maxWeight != null);
+  if (h.length < 1) return '<p class="muted">Za mało danych.</p>';
+  const W = 640, H = 220, P = 36;
+  const ws = h.map(x => x.maxWeight);
+  const min = Math.min(...ws) * 0.92, max = Math.max(...ws) * 1.05 + 0.1;
+  const x = i => h.length === 1 ? W / 2 : P + i * (W - 2 * P) / (h.length - 1);
+  const y = w => H - P - (w - min) / (max - min) * (H - 2 * P);
+  const pts = h.map((p, i) => `${x(i)},${y(p.maxWeight)}`).join(' ');
+  const gridY = [0, 0.5, 1].map(f => {
+    const w = min + f * (max - min);
+    return `<line x1="${P}" y1="${y(w)}" x2="${W - P}" y2="${y(w)}" class="c-grid"/><text x="4" y="${y(w) + 4}" class="c-txt">${Math.round(w)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">
+    ${gridY}
+    <polyline points="${pts}" class="c-line"/>
+    ${h.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.maxWeight)}" r="6" class="${(p.maxPainDuring > 2 || p.pain24h > 2) ? 'c-dot-pain' : 'c-dot'}"/>
+      <text x="${x(i)}" y="${y(p.maxWeight) - 12}" class="c-txt c-val">${p.maxWeight}</text>
+      <text x="${x(i)}" y="${H - 8}" class="c-txt c-date">${p.date.slice(5).replace('-', '.')}</text>`).join('')}
+  </svg>`;
+}
+
+// ---------------- WIDOK: Żywienie ----------------
+function nutriFor(date) {
+  if (!S.nutrition[date]) S.nutrition[date] = { weight: null, kcal: null, protein: null, collagen: false, omega3: false, water: 0 };
+  return S.nutrition[date];
+}
+function lastWeight() {
+  const dates = Object.keys(S.nutrition).sort();
+  for (let i = dates.length - 1; i >= 0; i--) if (S.nutrition[dates[i]].weight) return S.nutrition[dates[i]].weight;
+  return S.settings.bodyWeightKg;
+}
+function renderNutrition() {
+  const N = PLAN_DATA.nutrition;
+  const today = todayISO();
+  const n = nutriFor(today);
+  const bw = n.weight || lastWeight();
+  const proteinTarget = bw ? Math.round(bw * S.settings.proteinPerKg) : null;
+  const trainedToday = S.sessions.some(s => s.date === today) || (S.activeSession && S.activeSession.date === today);
+  const kcalTarget = S.settings.kcalMaintenance ? S.settings.kcalMaintenance + (trainedToday ? N.kcalSurplusTraining : 0) : null;
+
+  let html = `<div class="card">
+    <h3>🍗 Dziś · ${fmtDate(today)} ${trainedToday ? '· <span class="chip chip-hint">dzień treningowy +' + N.kcalSurplusTraining + ' kcal</span>' : ''}</h3>
+    <div class="nu-grid">
+      <div class="nu-field"><label>Waga ciała (kg)</label><input type="number" step="0.1" inputmode="decimal" id="nu-weight" value="${n.weight ?? ''}" placeholder="${bw ?? '—'}"></div>
+      <div class="nu-field"><label>Kalorie ${kcalTarget ? `(cel ${kcalTarget})` : '(ustaw maintenance w Planie)'}</label><input type="number" inputmode="numeric" id="nu-kcal" value="${n.kcal ?? ''}"></div>
+      <div class="nu-field"><label>Białko g ${proteinTarget ? `(cel ${proteinTarget} g = ${S.settings.proteinPerKg} g/kg)` : '(podaj wagę)'}</label><input type="number" inputmode="numeric" id="nu-protein" value="${n.protein ?? ''}"></div>
+      <div class="nu-field"><label>Nawodnienie (litry)</label>
+        <div class="stepper"><button data-step="-0.25">−</button><input type="number" step="0.25" inputmode="decimal" id="nu-water" value="${n.water || 0}"><button data-step="0.25">+</button></div>
+      </div>
+    </div>
+    <div class="nu-checks">
+      <label class="check ${n.collagen ? 'on' : ''}"><input type="checkbox" id="nu-collagen" ${n.collagen ? 'checked' : ''}> Kolagen 15–20 g + wit. C (30–60 min przed treningiem/rehabem)</label>
+      <label class="check ${n.omega3 ? 'on' : ''}"><input type="checkbox" id="nu-omega" ${n.omega3 ? 'checked' : ''}> Omega-3 (2–3 g EPA/DHA lub ryba)</label>
+    </div>
+    ${proteinTarget && n.protein != null ? proteinBar(n.protein, proteinTarget) : ''}
+  </div>`;
+
+  const stag = weightStagnation();
+  if (stag) html += `<div class="banner banner-warn">⚖️ Waga stoi od ~${stag} dni. ${esc(N.stagnation)}</div>`;
+
+  html += `<div class="card"><h3>Zasady</h3><ul class="rules">
+    <li>Białko: ${N.proteinPerKgMin}–${N.proteinPerKgMax} g/kg (górny zakres — gojenie ścięgna). Rozkład: ${esc(N.proteinPerMeal)}.</li>
+    <li>${esc(N.kcalRule)}</li>
+    <li>${esc(N.carbsPreWorkout)}.</li>
+    <li>${esc(N.collagen)}.</li>
+    <li>${esc(N.omega3)}.</li>
+  </ul></div>`;
+
+  html += `<div class="card"><h3>Szablon dnia</h3><div style="overflow-x:auto"><table class="tbl">
+    <tr><th>Posiłek</th><th>Timing</th><th>Białko</th><th>Uwaga</th></tr>
+    ${N.meals.map(m => `<tr><td>${esc(m.name)}</td><td>${esc(m.timing)}</td><td>${esc(m.protein)}</td><td>${esc(m.note)}</td></tr>`).join('')}
+  </table></div></div>`;
+
+  const dates = Object.keys(S.nutrition).sort().reverse().slice(0, 10).filter(d => d !== today);
+  if (dates.length) {
+    html += `<div class="card"><h3>Ostatnie dni</h3>${dates.map(d => {
+      const x = S.nutrition[d];
+      return `<div class="nu-hist">${fmtDate(d)}: ${x.weight ? x.weight + ' kg · ' : ''}${x.kcal ?? '—'} kcal · ${x.protein ?? '—'} g białka ${x.collagen ? '· 🦴' : ''}${x.omega3 ? '· 🐟' : ''}</div>`;
+    }).join('')}</div>`;
+  }
+
+  view.innerHTML = html;
+
+  const bind = (id, key, isNum = true) => {
+    const inp = document.getElementById(id);
+    inp.addEventListener('change', () => {
+      n[key] = inp.value === '' ? null : (isNum ? +inp.value : inp.value);
+      save(); render();
+    });
+  };
+  bind('nu-weight', 'weight'); bind('nu-kcal', 'kcal'); bind('nu-protein', 'protein'); bind('nu-water', 'water');
+  document.getElementById('nu-collagen').addEventListener('change', ev => { n.collagen = ev.target.checked; save(); render(); });
+  document.getElementById('nu-omega').addEventListener('change', ev => { n.omega3 = ev.target.checked; save(); render(); });
+  view.querySelectorAll('.stepper button').forEach(b => b.addEventListener('click', () => {
+    const inp = b.parentElement.querySelector('input');
+    inp.value = Math.max(0, Math.round(((+inp.value || 0) + +b.dataset.step) * 100) / 100);
+    inp.dispatchEvent(new Event('change'));
+  }));
+}
+function proteinBar(actual, target) {
+  const pct = Math.min(100, Math.round(actual / target * 100));
+  return `<div class="pbar"><div class="pbar-fill ${pct >= 90 ? 'ok' : ''}" style="width:${pct}%"></div><span>${actual}/${target} g białka (${pct}%)</span></div>`;
+}
+function weightStagnation() {
+  const entries = Object.keys(S.nutrition).sort().map(d => ({ d, w: S.nutrition[d].weight })).filter(x => x.w);
+  if (entries.length < 4) return null;
+  const last = entries[entries.length - 1];
+  const spanStart = entries.find(x => (new Date(last.d) - new Date(x.d)) / 864e5 <= 21 && (new Date(last.d) - new Date(x.d)) / 864e5 >= 14);
+  if (!spanStart) return null;
+  const days = Math.round((new Date(last.d) - new Date(spanStart.d)) / 864e5);
+  return Math.abs(last.w - spanStart.w) < 0.4 ? days : null;
+}
+
+// ---------------- WIDOK: Rehab ----------------
+function rehabFor(date) {
+  if (!S.rehab[date]) S.rehab[date] = { eccentric: false, stretching: false, ice: false, pain: null };
+  return S.rehab[date];
+}
+function renderRehab() {
+  const today = todayISO();
+  const r = rehabFor(today);
+  let streak = 0;
+  for (let i = 0; ; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const x = S.rehab[todayISO(d)];
+    if (x && x.eccentric && x.stretching) streak++;
+    else if (i === 0) continue;
+    else break;
+  }
+
+  let html = `<div class="card">
+    <h3>💪 Rehab łokcia — dziś ${streak > 1 ? `· 🔥 seria ${streak} dni` : ''}</h3>
+    <p class="muted">Codziennie, niezależnie od dni treningowych. Epicondylitis lateralis — priorytet: ekscentryka + rozciąganie.</p>
+    ${PLAN_DATA.rehab.map(item => `
+      <label class="check rehab-check ${r[item.id] ? 'on' : ''}">
+        <input type="checkbox" data-rehab="${item.id}" ${r[item.id] ? 'checked' : ''}>
+        <span><b>${esc(item.name)}</b><br><span class="muted">${esc(item.desc)}</span></span>
+      </label>`).join('')}
+    <div class="si-field"><label>Ogólny ból łokcia dziś (0–10)</label>
+      <div class="pain-chips">${[0,1,2,3,4,5,6,7,8,9,10].map(p =>
+        `<button class="pchip ${r.pain === p ? 'sel' : ''} ${p >= 3 ? 'phi' : p > 0 ? 'pmid' : 'plo'}" data-rehab-pain="${p}">${p}</button>`).join('')}</div>
+    </div>
+  </div>`;
+
+  html += `<div class="card"><h3>Zasady</h3><ul class="rules">${PLAN_DATA.rehabNotes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+
+  html += `<div class="card"><h3>Ostatnie 7 dni</h3><div class="rehab-week">${[6,5,4,3,2,1,0].map(i => {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const x = S.rehab[todayISO(d)];
+    const ok = x && x.eccentric && x.stretching;
+    return `<div class="rw-day ${ok ? 'ok' : ''}"><div>${['Nd','Pn','Wt','Śr','Cz','Pt','So'][d.getDay()]}</div><div>${ok ? '✓' : '·'}</div></div>`;
+  }).join('')}</div></div>`;
+
+  view.innerHTML = html;
+  view.querySelectorAll('[data-rehab]').forEach(c => c.addEventListener('change', () => {
+    r[c.dataset.rehab] = c.checked; save(); render();
+  }));
+  view.querySelectorAll('[data-rehab-pain]').forEach(b => b.addEventListener('click', () => {
+    r.pain = +b.dataset.rehabPain; save(); render();
+    if (r.pain > 3) toast('Ból ' + r.pain + '/10 — rozważ lód 10–15 min i lżejszy dzień. Jeśli się utrzymuje, skontaktuj się z lekarzem.', 6000);
+  }));
+}
+
+// ---------------- WIDOK: Plan / Ustawienia ----------------
+function trainerPlanCard() {
+  if (S.customPlan) {
+    const m = S.customPlan.meta;
+    const total = S.customPlan.workouts.length;
+    const done = S.customPlan.workouts.filter(plannedDone).length;
+    return `<div class="card">
+      <h3>📋 ${esc(m.nazwa)}</h3>
+      <p class="muted">${m.trener ? 'Trener: ' + esc(m.trener) + ' · ' : ''}${done}/${total} treningów wykonanych
+        · ${fmtDate(S.customPlan.workouts[0].date)} – ${fmtDate(S.customPlan.workouts[total - 1].date)}</p>
+      ${m.opis ? `<p class="muted">${esc(m.opis)}</p>` : ''}
+      ${m.uwagi ? `<p class="muted">📝 ${esc(m.uwagi)}</p>` : ''}
+      ${S.customPlan.workouts.map(w => `<div class="gate-check">${plannedDone(w) ? '✅' : '·'} ${fmtDate(w.date)} — ${esc(w.name)} <span class="muted">(${w.items.length} ćw.)</span></div>`).join('')}
+      <div class="modal-btns">
+        <button class="btn" id="btn-plan-import">⬆ Wczytaj nowy plan</button>
+        <button class="btn btn-danger" id="btn-plan-remove">Usuń plan</button>
+      </div>
+      <input type="file" id="plan-file" accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json" class="hidden">
+    </div>`;
+  }
+  return `<div class="card">
+    <h3>📋 Plan od trenera</h3>
+    <p class="muted">Wczytaj plik z gotowym planem (z datami treningów) — Markdown (zalecany, czytelna tabela) albo JSON.
+      Aplikacja pokaże właściwy trening na dany dzień, a logika bezpieczeństwa łokcia i progresji działa
+      na planie trenera tak samo jak na wbudowanym.</p>
+    <button class="btn btn-primary btn-full" id="btn-plan-4w">📅 Wczytaj gotowy plan 4 tyg. (21.07–15.08, wt/czw/sob)</button>
+    <div class="modal-btns">
+      <button class="btn" id="btn-plan-import">⬆ Wczytaj plan (.md / .json)</button>
+      <button class="btn" id="btn-plan-template">⬇ Pobierz szablon dla trenera</button>
+    </div>
+    <input type="file" id="plan-file" accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json" class="hidden">
+  </div>`;
+}
+
+function bindTrainerPlanCard() {
+  const p4 = document.getElementById('btn-plan-4w');
+  if (p4) p4.addEventListener('click', () => {
+    const { plan, errors } = parseTrainerPlanText(fourWeekPlanMd());
+    if (errors.length) { console.error(errors); toast('Błąd wbudowanego planu — zgłoś to.'); return; }
+    S.customPlan = plan;
+    rebuildCustomEx();
+    save(); render();
+    toast(`Wczytano plan „${plan.meta.nazwa}": ${plan.workouts.length} treningów.`, 6000);
+  });
+  const imp = document.getElementById('btn-plan-import');
+  if (imp) imp.addEventListener('click', () => document.getElementById('plan-file').click());
+  const tpl = document.getElementById('btn-plan-template');
+  if (tpl) tpl.addEventListener('click', () => {
+    saveFile('plan-trenera-szablon.md', trainerTemplateMd(), 'text/markdown');
+  });
+  const rm = document.getElementById('btn-plan-remove');
+  if (rm) rm.addEventListener('click', () => {
+    showModal(`<h3>Usunąć plan od trenera?</h3>
+      <p>Wrócisz do planu wbudowanego (fazy 0–2). Historia wykonanych treningów zostaje.</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn btn-danger" id="m-plan-rm">Usuń plan</button></div>`);
+    document.getElementById('m-plan-rm').onclick = () => {
+      S.customPlan = null; rebuildCustomEx(); save(); closeModal(); render();
+    };
+  });
+  const file = document.getElementById('plan-file');
+  if (file) file.addEventListener('change', ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    f.text().then(txt => {
+      const { plan, errors } = parseTrainerPlanText(txt);
+      if (errors.length) {
+        showModal(`<h3>Plan zawiera błędy</h3>${errors.slice(0, 12).map(e => `<p class="warn-line">• ${esc(e)}</p>`).join('')}
+          ${errors.length > 12 ? `<p class="muted">…i ${errors.length - 12} innych.</p>` : ''}
+          <button class="btn btn-full" onclick="closeModal()">OK</button>`);
+        return;
+      }
+      S.customPlan = plan;
+      rebuildCustomEx();
+      save(); render();
+      toast(`Wczytano plan „${plan.meta.nazwa}": ${plan.workouts.length} treningów (${fmtDate(plan.workouts[0].date)} – ${fmtDate(plan.workouts[plan.workouts.length - 1].date)}).`, 6000);
+    });
+  });
+}
+
+function renderPlan() {
+  const p = phaseDef();
+  const days = phaseDays(S.plan.phase);
+
+  const gate = S.customPlan ? null : phaseGateStatus();
+
+  let html = trainerPlanCard();
+
+  if (!S.customPlan) html += `<div class="card">
+    <h3>${esc(p.name)}</h3>
+    <p class="muted">${esc(p.desc)}</p>
+    <div class="week-ctl">
+      Tydzień: <button class="btn btn-sm" id="wk-minus">−</button> <b>${S.plan.week}/${p.weeks}</b> <button class="btn btn-sm" id="wk-plus">+</button>
+      <span class="muted">(${esc(p.rpeLabel[S.plan.week] || '')})</span>
+    </div>
+  </div>`;
+
+  if (gate) {
+    html += `<div class="card">
+      <h3>Przejście do Fazy ${S.plan.phase + 1}</h3>
+      <p class="muted">${esc(p.advanceCriteria)}</p>
+      ${gate.checks.map(c => `<div class="gate-check">${c.ok ? '✅' : '❌'} ${esc(c.label)}</div>`).join('')}
+      <button class="btn ${gate.allOk ? 'btn-primary' : ''} btn-full" id="advance-phase">
+        ${gate.allOk ? '🔓 Przejdź do Fazy ' + (S.plan.phase + 1) : 'Przejdź mimo to (kryteria niespełnione)'}
+      </button>
+    </div>`;
+  }
+  if (!S.customPlan && S.plan.phase > 0) {
+    html += `<button class="link-btn" id="back-phase">← Wróć do Fazy ${S.plan.phase - 1}</button>`;
+  }
+
+  if (!S.customPlan) for (const [d, day] of Object.entries(days)) {
+    html += `<details class="card"><summary><b>Dzień ${d}</b> — ${esc(day.label)}</summary>
+      ${day.items.map(item => {
+        const t = itemTargets(item, S.plan.week);
+        const ed = exDef(item.ex);
+        return `<div class="plan-ex">
+          <div class="ex-head"><div class="ex-name">${esc(ed.name)}</div><div class="ex-badges">${exBadges(item.ex, item)}</div></div>
+          <div class="ex-sub">${t.sets}×${esc(t.reps)} · ${t.weight != null ? fmtKg(t.weight) : esc(t.note || 'wg RPE')} · tempo ${esc(item.tempo)} · przerwa ${esc(item.restLabel || item.rest + ' s')}</div>
+        </div>`;
+      }).join('')}
+    </details>`;
+  }
+
+  html += `<div class="card"><h3>🛡️ Zasady bezpieczeństwa (zaszyte w apce)</h3>
+    <ul class="rules">${PLAN_DATA.safetyRules.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>`;
+
+  html += `<div class="card"><h3>⚙️ Ustawienia</h3>
+    <div class="nu-grid">
+      <div class="nu-field"><label>Waga ciała (kg)</label><input type="number" step="0.1" id="set-bw" value="${S.settings.bodyWeightKg ?? ''}"></div>
+      <div class="nu-field"><label>Białko (g/kg)</label><input type="number" step="0.1" min="1.8" max="2.2" id="set-ppk" value="${S.settings.proteinPerKg}"></div>
+      <div class="nu-field"><label>Kcal maintenance</label><input type="number" id="set-kcal" value="${S.settings.kcalMaintenance ?? ''}"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" id="btn-export">⬇ Eksport danych</button>
+      <button class="btn" id="btn-import">⬆ Import</button>
+      <button class="btn btn-danger" id="btn-reset">Reset</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" class="hidden">
+  </div>`;
+
+  view.innerHTML = html;
+
+  bindTrainerPlanCard();
+  const wkM = document.getElementById('wk-minus');
+  if (wkM) wkM.addEventListener('click', () => { S.plan.week = Math.max(1, S.plan.week - 1); save(); render(); });
+  const wkP = document.getElementById('wk-plus');
+  if (wkP) wkP.addEventListener('click', () => { S.plan.week = Math.min(p.weeks, S.plan.week + 1); save(); render(); });
+
+  const adv = document.getElementById('advance-phase');
+  if (adv) adv.addEventListener('click', () => {
+    const ok = gate.allOk;
+    showModal(`<h3>${ok ? 'Przejść do Fazy ' + (S.plan.phase + 1) + '?' : '⚠️ Kryteria niespełnione'}</h3>
+      <p>${ok ? 'Potwierdzasz brak bólu łokcia przez wymagany okres.' : 'Plan zakłada przejście dopiero po spełnieniu kryteriów bezpieczeństwa. Przejście teraz zwiększa ryzyko nawrotu.'}</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn ${ok ? 'btn-primary' : 'btn-danger'}" id="m-adv">Potwierdzam — przejdź</button></div>`);
+    document.getElementById('m-adv').onclick = () => {
+      S.plan.phase++; S.plan.week = 1; S.plan.phaseStartedOn = todayISO();
+      save(); closeModal(); render();
+      toast('Faza ' + S.plan.phase + ' odblokowana! 🎉');
+    };
+  });
+  const back = document.getElementById('back-phase');
+  if (back) back.addEventListener('click', () => {
+    S.plan.phase--; S.plan.week = 1; S.plan.phaseStartedOn = todayISO(); save(); render();
+  });
+
+  const bindSet = (id, key) => document.getElementById(id).addEventListener('change', ev => {
+    S.settings[key] = ev.target.value === '' ? null : +ev.target.value; save();
+  });
+  bindSet('set-bw', 'bodyWeightKg'); bindSet('set-ppk', 'proteinPerKg'); bindSet('set-kcal', 'kcalMaintenance');
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    saveFile(`trening-backup-${todayISO()}.json`, JSON.stringify(S, null, 2), 'application/json');
+  });
+  document.getElementById('btn-import').addEventListener('click', () => document.getElementById('import-file').click());
+  document.getElementById('import-file').addEventListener('change', ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    f.text().then(txt => {
+      try { S = Object.assign(defaultState(), JSON.parse(txt)); rebuildCustomEx(); save(); render(); toast('Dane zaimportowane.'); }
+      catch (e) { toast('Błąd importu: niepoprawny plik.'); }
+    });
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    showModal(`<h3>Zresetować wszystkie dane?</h3><p>Usunie treningi, żywienie i rehab. Zrób najpierw eksport!</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn btn-danger" id="m-reset">Resetuj</button></div>`);
+    document.getElementById('m-reset').onclick = () => { S = defaultState(); rebuildCustomEx(); save(); closeModal(); render(); };
+  });
+}
+
+function phaseGateStatus() {
+  const p = phaseDef();
+  if (!p.advanceCriteria || S.plan.phase >= PLAN_DATA.phases.length - 1) return null;
+  const inPhase = S.sessions.filter(s => s.phase === S.plan.phase);
+  const needWeeks = p.id === 0 ? 2 : 6;
+  const needSessions = p.sessionsPerWeek * p.weeks;
+  const firstDate = inPhase.length ? new Date(inPhase[0].date) : null;
+  const daysIn = firstDate ? Math.floor((Date.now() - firstDate) / 864e5) : 0;
+  const anyPain = inPhase.some(s => s.exercises.some(e =>
+    e.sets.some(x => (x.pain || 0) > 0) || (e.pain24h != null && e.pain24h > 0)));
+  const missing24h = inPhase.some(s => s.exercises.some(e => e.sets.length && e.pain24h == null));
+  const checks = [
+    { ok: inPhase.length >= needSessions, label: `Min. ${needSessions} sesji w tej fazie (masz ${inPhase.length})` },
+    { ok: daysIn >= needWeeks * 7 - 1, label: `Min. ${needWeeks} tyg. w fazie (masz ${daysIn} dni)` },
+    { ok: !anyPain, label: 'Zero bólu łokcia w trakcie treningów' },
+    { ok: !missing24h, label: 'Wszystkie oceny bólu 24h uzupełnione' }
+  ];
+  return { checks, allOk: checks.every(c => c.ok) };
+}
+
+document.getElementById('app-ver').textContent = 'ver. ' + APP_VERSION;
+rebuildCustomEx();
+render();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+  }
+</script>
+</body>
+</html>
