@@ -275,11 +275,48 @@ NutritionEntry = {
   weight: number | null,            // waga ciała tego dnia (kg)
   kcal: number | null,               // spożyte kalorie
   protein: number | null,            // spożyte białko (g)
-  collagen: boolean,                 // czy przyjęto kolagen + wit. C
-  omega3: boolean,
-  water: number                      // nawodnienie w litrach
+  fiber: number | null,              // błonnik (g)
+  water: number,                     // nawodnienie w litrach
+  [supplementId: string]: boolean    // dynamiczne klucze — jeden na każdą pozycję
+                                      // AKTUALNEJ listy S.supplements (jak w RehabEntry —
+                                      // dawne stałe pola collagen/omega3 zostały zastąpione
+                                      // tym samym dynamicznym mechanizmem co rehab)
 }
 ```
+
+### 3.7a. `Supplement` (element `S.supplements[]`) i `MeasurementEntry`
+
+```
+Supplement = { id: string, name: string, dose: string, timing: string }
+```
+Lista jest **zawsze w pełni edytowalna przez użytkownika** (dodaj/usuń
+dowolną pozycję w zakładce Żywienie) — to nie jest osobny "wbudowany vs z
+pliku" mechanizm jak w rehab; import pliku diety od trenera po prostu
+**podmienia całą tablicę** na nowo sparsowaną listę (użytkownik może ją
+dalej edytować ręcznie już po imporcie). Domyślny seed (`defaultState()`):
+2 pozycje — Kolagen + wit. C, Omega-3.
+
+```
+MeasurementEntry (klucz: data ISO, w S.measurements) = {
+  talia: number|null, brzuch: number|null, uda: number|null,
+  klatka: number|null, biceps: number|null, lydki: number|null   // wszystko w cm
+}
+```
+Logowane technicznie jak zwykły wpis "na dziś" (bez wymuszania cotygodniowej
+częstotliwości w danych — to tylko zalecenie w UI), z tymi samymi polami co
+generuje wykres trendu (sekcja 4).
+
+`S.settings` ma dodatkowo: `kcalAdjustMin`/`kcalAdjustMax` (liczby signed,
+domyślnie 0/0 — ujemne = deficyt, dodatnie = nadwyżka względem
+`kcalMaintenance`; oba 0 = "utrzymanie", wtedy stosuje się stary,
+automatyczny bonus `+kcalSurplusTraining` w dni treningowe; gdy którekolwiek
+≠0, ten automatyczny bonus jest CAŁKOWICIE POMIJANY — cel to wtedy zakres
+`[kcalMaintenance+adjustMin, kcalMaintenance+adjustMax]`), `fiberFocus`
+(bool) i `fiberTargetG` (number|null, opcjonalny cel gramowy błonnika).
+
+`S.nutritionPlanMeta`: `{ trener, zawodnik, nazwa, notes } | null` — tylko
+do wyświetlenia karty "skąd pochodzi ostatnio wczytany plan żywieniowy";
+usunięcie tej etykiety NIE cofa ustawionych przez import liczb/listy.
 
 ### 3.8. `RehabEntry` (klucz: data ISO)
 
@@ -675,24 +712,85 @@ użytkownika).
 ### 4.18. Log żywieniowy
 
 - **Input (zakładka Żywienie, zawsze dotyczy DZISIAJ):** waga ciała, kalorie,
-  białko (g), nawodnienie (stepper ±0.25 l), dwa checkboxy (kolagen+wit.C,
-  omega-3).
+  białko (g), błonnik (g), nawodnienie (stepper ±0.25 l).
 - **Zachowanie:**
   - Cel białkowy = `waga_ciała_wpisana_dziś_lub_ostatnia_znana × proteinPerKg`
     (zaokrąglony). Jeśli brak jakiejkolwiek wagi — brak celu, pokazuje się
     podpowiedź "podaj wagę".
-  - Cel kaloryczny = `kcalMaintenance` (z ustawień) `+ kcalSurplusTraining`
-    **jeśli dziś istnieje zakończona LUB aktywna sesja treningowa** (wykryte
-    po dacie), inaczej sam `kcalMaintenance`. Jeśli `kcalMaintenance` nie
-    ustawiony — brak celu.
+  - **Cel kaloryczny — dwa tryby**, zależnie od `settings.kcalAdjustMin/Max`
+    (oba domyślnie 0):
+    - **Tryb "utrzymanie" (oba = 0, domyślny/stary):** cel = `kcalMaintenance
+      + kcalSurplusTraining` **jeśli dziś istnieje zakończona LUB aktywna
+      sesja treningowa**, inaczej sam `kcalMaintenance`.
+    - **Tryb "deficyt/nadwyżka" (którekolwiek ≠ 0, ustawiane ręcznie albo
+      importem pliku diety — sekcja 5.5):** cel to ZAKRES
+      `[kcalMaintenance+min(adjustMin,adjustMax), kcalMaintenance+max(...)]`.
+      Automatyczny bonus treningowy z trybu "utrzymanie" jest wtedy
+      CAŁKOWICIE POMIJANY (nie sumuje się z deficytem/nadwyżką).
+    - W obu trybach: brak `kcalMaintenance` → brak celu, podpowiedź "ustaw
+      maintenance w Planie".
   - Pasek postępu białka: kolor zwykły do 89%, zielony od 90% w górę.
   - **Reguła stagnacji wagi:** znajdź najnowszy wpis wagi. Znajdź jakikolwiek
     wcześniejszy wpis wagi sprzed **14 do 21 dni** od najnowszego. Jeśli
     różnica wag < 0.4 kg → pokaż baner z liczbą dni i treścią reguły korekty
     z `PLAN_DATA.nutrition.stagnation`.
-  - Lista ostatnich 10 dni z wpisami (poza dniem dzisiejszym).
+  - Reguła błonnika: jeśli `settings.fiberFocus` — dodatkowa pozycja w
+    karcie "Zasady" przypominająca o priorytecie błonnika (z celem gramowym,
+    jeśli podany).
+  - Lista ostatnich 10 dni z wpisami (poza dniem dzisiejszym) — pokazuje
+    wagę/kcal/białko/błonnik i licznik `X/Y` wziętych suplementów tego dnia.
 - Wszystkie pola zapisują się **natychmiast po zmianie** (`change` event),
   bez osobnego przycisku "zapisz".
+
+### 4.18a. Panel suplementów (codzienna checklista, w pełni edytowalna)
+
+- **Lista** `S.supplements[]` — zawsze w pełni edytowalna przez użytkownika
+  wprost w tej karcie: formularz "Nazwa" + "Dawka" + przycisk "Dodaj"
+  (id = `slugify(nazwa)`, odrzuca duplikat po id z toastem), oraz przycisk
+  "✕" przy każdej pozycji do usunięcia. Import pliku diety od trenera
+  (sekcja 5.5) **podmienia całą listę** na nowo — pominięcie pozycji w
+  nowym pliku usuwa ją z checklisty (np. tak znika "niepotrzebny kolagen").
+- **Input:** checkbox per pozycja, zapisywany natychmiast pod kluczem =
+  `supplement.id` w `NutritionEntry` dzisiejszej daty (dokładnie ten sam
+  mechanizm co dynamiczne klucze w `RehabEntry`).
+- Każda pozycja pokazuje nazwę, dawkę i (jeśli inne niż "codziennie")
+  częstotliwość.
+
+### 4.18b. Wykres wagi ciała i obwodów z trendem (rośnie/spada/stabilnie)
+
+- **Jeden wspólny widżet** (dropdown + wykres SVG) do wyboru: "Waga ciała"
+  albo jeden z 6 obwodów. Wykres to DOKŁADNIE ten sam generyczny komponent
+  liniowy co progresja obciążenia w Historii (wspólna funkcja renderująca,
+  różni się tylko źródłem punktów — bez podświetlania bólu, które dotyczy
+  tylko ćwiczeń).
+- **Odznaka trendu:** porównaj najnowszy wpis z najbliższym pasującym
+  wpisem sprzed **6 do 21 dni** (szukaj od najnowszego wstecz, pierwszy
+  pasujący wygrywa). Różnica < 0.3 → "➡️ stabilnie"; ujemna → "📉 spada";
+  dodatnia → "📈 rośnie" — zawsze z deltą i liczbą dni w etykiecie.
+
+### 4.18c. Obwody ciała — cotygodniowy pomiar
+
+- **Input:** 6 pól liczbowych (cm) na DZISIAJ: talia, brzuch, uda, klatka,
+  biceps, łydki. Zapis natychmiastowy jak reszta pól żywieniowych.
+  Częstotliwość "raz w tygodniu" to tylko zalecenie w opisie karty — dane
+  nie wymuszają żadnej konkretnej częstotliwości.
+- Każdy z 6 obwodów jest dostępny jako osobna metryka w widżecie trendu
+  (4.18b).
+
+### 4.18d. Plan żywieniowy od trenera — import (osobny od planu treningowego)
+
+- **Input:** plik `.md`/`.markdown`/`.txt` wybrany przez natywny input w
+  karcie na górze zakładki Żywienie (format opisany w sekcji 5.5).
+- **Zachowanie:** identyczna filozofia "zero częściowego importu" co plan
+  treningowy — błędy zbierane i pokazane razem, nic się nie zapisuje przy
+  choćby jednym błędzie. Po sukcesie: nadpisuje `proteinPerKg`,
+  `kcalAdjustMin/Max`, `fiberFocus`/`fiberTargetG` (tylko pola faktycznie
+  podane w pliku), **podmienia całą listę suplementów**, zapisuje metadane
+  do wyświetlenia w karcie źródła planu. Przycisk "Usuń etykietę" czyści
+  TYLKO informację "skąd pochodzi plan" — liczby i lista suplementów
+  zostają (można je dalej zmieniać ręcznie).
+- Przycisk "Pobierz szablon dla trenera" — analogicznie do planu
+  treningowego, generuje gotowy przykładowy plik `.md`.
 
 ### 4.19. Rehab łokcia — codzienna checklista
 
@@ -1098,6 +1196,56 @@ Każda taka podsekcja staje się jedną pozycją na **codziennej, odhaczalnej
 liście** w zakładce Rehab, **zastępując** wbudowany domyślny protokół (3
 pozycje: ekscentryczny wyprost nadgarstka z taśmą, stretching wyprostników,
 lód/krioterapia).
+
+### 5.5. Format pliku planu żywieniowego od trenera — DRUGI, OSOBNY plik/import
+
+To jest kompletnie osobny mechanizm importu od planu treningowego (sekcje
+5.1–5.4) — inny format, inny przycisk ("Żywienie → Wczytaj plan
+żywieniowy"), inny parser. Cel: trener przekazuje cele kaloryczne/białkowe
+i listę suplementów bez dotykania planu treningowego.
+
+```markdown
+# Dieta: [nazwa/cel bloku]
+Trener: [imię]
+Zawodnik: [imię]
+Deficyt: [X-Y] kcal          (albo: Nadwyżka: [X-Y] kcal — jedno z dwóch)
+Bialko: [liczba] g/kg
+Blonnik: [dowolny tekst; obecność linii włącza przypomnienie; pierwsza liczba w tekście, jeśli jest, staje się celem gramowym]
+Uwagi: [dowolna notatka wyświetlana w karcie]
+
+| Suplement | Dawka | Kiedy |
+|---|---|---|
+| Nazwa | dawka (albo "-") | kiedy (domyślnie "codziennie") |
+```
+
+**Parsowanie linii kluczowych** (rozpoznawane niezależnie od kolejności,
+każda opcjonalna poza tytułem):
+- `Deficyt:`/`Nadwyżka:` — wyciągnij WSZYSTKIE liczby z wartości, posortuj
+  rosnąco jako `[lo, hi]`. Dla `Deficyt`: `kcalAdjustMin = -hi, kcalAdjustMax
+  = -lo` (np. "400-500" → min=-500, max=-400). Dla `Nadwyżka`:
+  `kcalAdjustMin = lo, kcalAdjustMax = hi` wprost. Brak liczby → błąd.
+- `Bialko:`/`Białko:` — pierwsza liczba w wartości → `proteinPerKg`.
+- `Blonnik:`/`Błonnik:` — sama obecność linii ustawia `fiberFocus = true`;
+  jeśli w tekście jest liczba, to ona → `fiberTargetG` (opcjonalnie).
+- `Uwagi:` → wolny tekst, wyświetlany w karcie planu.
+- Tabela: wiersz nagłówka (komórka zaczynająca się od "suplement", bez
+  rozróżniania wielkości liter) i separator `|---|` pomijane jak w
+  formacie planu treningowego. Wymagane min. 2 kolumny (Suplement, Dawka);
+  3. kolumna (Kiedy) opcjonalna, domyślnie "codziennie". `id` każdej
+  pozycji = `slugify(nazwa)`.
+- Plik musi zawierać CHOĆ JEDNO z: cel kcal, białko, błonnik, uwagi,
+  którykolwiek wiersz suplementu — inaczej błąd "plik nie zawiera żadnych
+  rozpoznanych danych o diecie". Zero-częściowy-import jak w formacie
+  treningowym — błędy zbierane wszystkie naraz, nic się nie zapisuje przy
+  choćby jednym błędzie.
+
+**Efekt zastosowania importu (kolejność ma znaczenie — patrz kod):**
+`proteinPerKg` (jeśli podane) nadpisuje `S.settings.proteinPerKg`;
+`kcalAdjustMin/Max` (jeśli podane) nadpisują odpowiednie pola w
+`S.settings`; `fiberFocus`/`fiberTargetG` analogicznie; **`S.supplements`
+zostaje CAŁKOWICIE ZASTĄPIONE** nowo sparsowaną listą (nie merge — pominięcie
+pozycji w nowym pliku = usunięcie jej z checklisty). `S.nutritionPlanMeta`
+zapisuje się tylko do wyświetlenia karty źródła planu.
 
 ---
 

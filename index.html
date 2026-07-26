@@ -492,7 +492,7 @@ body {
 'use strict';
 
 // Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
-const APP_VERSION = '010';
+const APP_VERSION = '011';
 
 // ============================================================
 // DANE PLANU — powrót do treningów po epicondylitis lateralis
@@ -830,14 +830,28 @@ const STORE_KEY = 'gymapp_v1';
 
 const defaultState = () => ({
   v: 1,
-  settings: { bodyWeightKg: null, proteinPerKg: PLAN_DATA.nutrition.proteinPerKgDefault, kcalMaintenance: null },
+  settings: {
+    bodyWeightKg: null, proteinPerKg: PLAN_DATA.nutrition.proteinPerKgDefault, kcalMaintenance: null,
+    // Cel kaloryczny względem "kcalMaintenance": ujemne = deficyt, dodatnie = nadwyżka, oba 0 = utrzymanie
+    // (wtedy stosuje się stary, domyślny bonus +kcal w dni treningowe — patrz PLAN_DATA.nutrition.kcalSurplusTraining).
+    kcalAdjustMin: 0, kcalAdjustMax: 0,
+    fiberFocus: false, fiberTargetG: null
+  },
   plan: { phase: 0, week: 1, phaseStartedOn: todayISO() },
   sessions: [],
   activeSession: null,
   paused: {},
   nutrition: {},
   rehab: {},
-  customPlan: null // plan wczytany z pliku od trenera (zastępuje plan wbudowany)
+  customPlan: null, // plan wczytany z pliku od trenera (zastępuje plan wbudowany)
+  // Suplementy — zawsze w pełni edytowalna lista użytkownika (dodawaj/usuwaj ręcznie).
+  // Import pliku diety od trenera PODMIENIA tę listę w całości (jak plan treningowy).
+  supplements: [
+    { id: 'kolagen', name: 'Kolagen + wit. C', dose: '15–20 g + 100–200 mg wit. C', timing: 'przed treningiem/rehabem' },
+    { id: 'omega3', name: 'Omega-3', dose: '2–3 g EPA/DHA', timing: 'codziennie' }
+  ],
+  measurements: {}, // { [data ISO]: { talia, brzuch, uda, klatka, biceps, lydki } } — obwody, zalecane raz w tygodniu
+  nutritionPlanMeta: null // { trener, zawodnik, nazwa, notes } — z ostatnio wczytanego pliku diety, tylko do wyświetlenia
 });
 
 let S = load();
@@ -2322,38 +2336,244 @@ function renderHistory() {
   }));
 }
 
-function buildChart(exId) {
-  const h = exHistory(exId).filter(x => x.maxWeight != null);
-  if (h.length < 1) return '<p class="muted">Za mało danych.</p>';
+// Generyczny wykres liniowy SVG — używany dla progresji obciążenia (Historia),
+// wagi ciała i obwodów (Żywienie). points: [{ label: string, value: number, highlight?: bool }]
+function buildLineChartSvg(points) {
+  if (!points.length) return '<p class="muted">Za mało danych.</p>';
   const W = 640, H = 220, P = 36;
-  const ws = h.map(x => x.maxWeight);
-  const min = Math.min(...ws) * 0.92, max = Math.max(...ws) * 1.05 + 0.1;
-  const x = i => h.length === 1 ? W / 2 : P + i * (W - 2 * P) / (h.length - 1);
-  const y = w => H - P - (w - min) / (max - min) * (H - 2 * P);
-  const pts = h.map((p, i) => `${x(i)},${y(p.maxWeight)}`).join(' ');
+  const vs = points.map(p => p.value);
+  const min = Math.min(...vs) * 0.92, max = Math.max(...vs) * 1.05 + 0.1;
+  const x = i => points.length === 1 ? W / 2 : P + i * (W - 2 * P) / (points.length - 1);
+  const y = v => H - P - (v - min) / (max - min) * (H - 2 * P);
+  const pts = points.map((p, i) => `${x(i)},${y(p.value)}`).join(' ');
   const gridY = [0, 0.5, 1].map(f => {
-    const w = min + f * (max - min);
-    return `<line x1="${P}" y1="${y(w)}" x2="${W - P}" y2="${y(w)}" class="c-grid"/><text x="4" y="${y(w) + 4}" class="c-txt">${Math.round(w)}</text>`;
+    const v = min + f * (max - min);
+    return `<line x1="${P}" y1="${y(v)}" x2="${W - P}" y2="${y(v)}" class="c-grid"/><text x="4" y="${y(v) + 4}" class="c-txt">${Math.round(v * 10) / 10}</text>`;
   }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="chart">
     ${gridY}
     <polyline points="${pts}" class="c-line"/>
-    ${h.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.maxWeight)}" r="6" class="${(p.maxPainDuring > 2 || p.pain24h > 2) ? 'c-dot-pain' : 'c-dot'}"/>
-      <text x="${x(i)}" y="${y(p.maxWeight) - 12}" class="c-txt c-val">${p.maxWeight}</text>
-      <text x="${x(i)}" y="${H - 8}" class="c-txt c-date">${p.date.slice(5).replace('-', '.')}</text>`).join('')}
+    ${points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="6" class="${p.highlight ? 'c-dot-pain' : 'c-dot'}"/>
+      <text x="${x(i)}" y="${y(p.value) - 12}" class="c-txt c-val">${p.value}</text>
+      <text x="${x(i)}" y="${H - 8}" class="c-txt c-date">${esc(p.label)}</text>`).join('')}
   </svg>`;
+}
+function buildChart(exId) {
+  const h = exHistory(exId).filter(x => x.maxWeight != null);
+  const points = h.map(p => ({
+    label: p.date.slice(5).replace('-', '.'), value: p.maxWeight,
+    highlight: p.maxPainDuring > 2 || p.pain24h > 2
+  }));
+  return buildLineChartSvg(points);
+}
+
+// Trend rosnąco/malejąco/stabilnie — porównuje najnowszy wpis z wpisem sprzed 7–21 dni.
+function trendBadge(entries) {
+  if (entries.length < 2) return '';
+  const last = entries[entries.length - 1];
+  const prior = [...entries].reverse().find(x => {
+    const days = (new Date(last.d) - new Date(x.d)) / 864e5;
+    return days >= 6 && days <= 21;
+  }) || entries[0];
+  if (prior.d === last.d) return '';
+  const delta = Math.round((last.v - prior.v) * 10) / 10;
+  const days = Math.round((new Date(last.d) - new Date(prior.d)) / 864e5);
+  if (Math.abs(delta) < 0.3) return `<span class="chip">➡️ stabilnie (${days} dni)</span>`;
+  const dir = delta > 0 ? '📈 rośnie' : '📉 spada';
+  return `<span class="chip ${delta > 0 ? 'chip-warn' : 'chip-hint'}">${dir} ${delta > 0 ? '+' : ''}${delta} w ${days} dni</span>`;
+}
+
+const MEASUREMENT_FIELDS = [
+  { id: 'talia', label: 'Talia' }, { id: 'brzuch', label: 'Brzuch' },
+  { id: 'uda', label: 'Uda' }, { id: 'klatka', label: 'Klatka' },
+  { id: 'biceps', label: 'Biceps' }, { id: 'lydki', label: 'Łydki' }
+];
+
+// Zbiera serię {d, v} dla wybranej metryki trendu: 'weight' = waga ciała, inaczej klucz obwodu.
+function trendSeries(metric) {
+  if (metric === 'weight') {
+    return Object.keys(S.nutrition).filter(d => S.nutrition[d].weight != null).sort()
+      .map(d => ({ d, v: S.nutrition[d].weight }));
+  }
+  return Object.keys(S.measurements).filter(d => S.measurements[d][metric] != null).sort()
+    .map(d => ({ d, v: S.measurements[d][metric] }));
+}
+function buildTrendChart(metric) {
+  const series = trendSeries(metric);
+  return buildLineChartSvg(series.map(e => ({ label: e.d.slice(5).replace('-', '.'), value: e.v })));
+}
+
+// ---------------- Plan żywieniowy od trenera (osobny plik, format Markdown) ----------------
+// Zamienia plik diety na strukturę wewnętrzną. Zwraca { plan, errors }.
+function parseNutritionPlanText(txt) {
+  const errors = [];
+  const lines = txt.trim().split(/\r?\n/);
+  const meta = { trener: null, zawodnik: null, nazwa: null };
+  let kcalAdjustMin = null, kcalAdjustMax = null;
+  let proteinPerKg = null;
+  let fiberFocus = false, fiberTargetG = null;
+  let notes = null;
+  const supplements = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line || line.startsWith('<!--')) continue;
+
+    if (line.startsWith('# ')) {
+      meta.nazwa = line.slice(2).replace(/^(Dieta|Plan żywieniowy|Plan)\s*:\s*/i, '').trim();
+      continue;
+    }
+    const kv = line.match(/^(Trener|Zawodnik|Deficyt|Nadwyżka|Nadwyzka|Bialko|Białko|Blonnik|Błonnik|Uwagi)\s*:\s*(.+)$/i);
+    if (kv && !line.startsWith('|')) {
+      const kw = kv[1].toLowerCase();
+      const val = kv[2].trim();
+      if (kw === 'trener') meta.trener = val;
+      else if (kw === 'zawodnik') meta.zawodnik = val;
+      else if (kw === 'deficyt' || kw === 'nadwyżka' || kw === 'nadwyzka') {
+        const nums = (val.match(/\d+(?:[.,]\d+)?/g) || []).map(n => parseFloat(n.replace(',', '.')));
+        if (!nums.length) {
+          errors.push(`Linia ${i + 1}: "${kv[1]}" musi zawierać liczbę kcal, jest: "${val}".`);
+        } else {
+          const sorted = [...nums].sort((a, b) => a - b);
+          const lo = sorted[0], hi = sorted[sorted.length - 1];
+          if (kw === 'deficyt') { kcalAdjustMin = -hi; kcalAdjustMax = -lo; }
+          else { kcalAdjustMin = lo; kcalAdjustMax = hi; }
+        }
+      } else if (kw === 'bialko' || kw === 'białko') {
+        const m = val.match(/\d+(?:[.,]\d+)?/);
+        if (!m) errors.push(`Linia ${i + 1}: "Białko" musi zawierać liczbę g/kg, jest: "${val}".`);
+        else proteinPerKg = parseFloat(m[0].replace(',', '.'));
+      } else if (kw === 'blonnik' || kw === 'błonnik') {
+        fiberFocus = true;
+        const m = val.match(/\d+(?:[.,]\d+)?/);
+        if (m) fiberTargetG = parseFloat(m[0].replace(',', '.'));
+      } else if (kw === 'uwagi') {
+        notes = val;
+      }
+      continue;
+    }
+    if (line.startsWith('|')) {
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      if (!cells.length || cells.every(c => /^:?-{2,}:?$/.test(c))) continue; // separator |---|
+      if (cells[0].toLowerCase().startsWith('suplement')) continue; // wiersz nagłówka
+      if (cells.length < 2) { errors.push(`Linia ${i + 1}: wiersz suplementu musi mieć min. 2 kolumny: Suplement | Dawka.`); continue; }
+      const [nameCell, doseCell, timingCell = ''] = cells;
+      if (!nameCell) { errors.push(`Linia ${i + 1}: brak nazwy suplementu.`); continue; }
+      const empty = v => v === '' || v === '-' || v === '—';
+      supplements.push({
+        id: slugify(nameCell), name: nameCell,
+        dose: empty(doseCell) ? '' : doseCell,
+        timing: empty(timingCell) ? 'codziennie' : timingCell
+      });
+      continue;
+    }
+  }
+
+  if (kcalAdjustMin == null && proteinPerKg == null && !supplements.length && !fiberFocus && !notes) {
+    errors.push('Plik nie zawiera żadnych rozpoznanych danych o diecie (Deficyt/Nadwyżka, Białko, tabela suplementów, Błonnik albo Uwagi).');
+  }
+  if (errors.length) return { errors };
+  return {
+    plan: {
+      meta: { trener: meta.trener, zawodnik: meta.zawodnik, nazwa: meta.nazwa || 'Plan żywieniowy od trenera' },
+      kcalAdjustMin, kcalAdjustMax, proteinPerKg, fiberFocus, fiberTargetG, notes, supplements
+    },
+    errors: []
+  };
+}
+
+function nutritionTemplateMd() {
+  return `# Dieta: nazwa bloku/celu
+Trener: Pedro
+Zawodnik: Bartłomiej
+Deficyt: 400-500 kcal
+Bialko: 2.1 g/kg
+Blonnik: skup się na odpowiedniej podaży błonnika codziennie (warzywa, pełne ziarna, rośliny strączkowe)
+Uwagi: Dowolna dodatkowa notatka widoczna w aplikacji.
+
+| Suplement | Dawka | Kiedy |
+|---|---|---|
+| Kreatyna | 9 g | codziennie |
+| Cytrulina | 5 g | codziennie |
+| Magnez | 4000 mg | codziennie |
+| VitaPack+ | 2 tabletki | codziennie |
+| Ashwagandha | - | codziennie |
+| Omega-3 | - | codziennie |
+`;
 }
 
 // ---------------- WIDOK: Żywienie ----------------
 function nutriFor(date) {
-  if (!S.nutrition[date]) S.nutrition[date] = { weight: null, kcal: null, protein: null, collagen: false, omega3: false, water: 0 };
+  // Klucze suplementów (np. "kolagen", "kreatyna") są dynamiczne — dopisywane
+  // dopiero gdy użytkownik odhaczy dany suplement, tak jak w checkliście Rehab.
+  if (!S.nutrition[date]) S.nutrition[date] = { weight: null, kcal: null, protein: null, fiber: null, water: 0 };
   return S.nutrition[date];
+}
+function measFor(date) {
+  if (!S.measurements[date]) S.measurements[date] = { talia: null, brzuch: null, uda: null, klatka: null, biceps: null, lydki: null };
+  return S.measurements[date];
 }
 function lastWeight() {
   const dates = Object.keys(S.nutrition).sort();
   for (let i = dates.length - 1; i >= 0; i--) if (S.nutrition[dates[i]].weight) return S.nutrition[dates[i]].weight;
   return S.settings.bodyWeightKg;
 }
+function nutritionPlanCard() {
+  const meta = S.nutritionPlanMeta;
+  let html = `<div class="card">`;
+  if (meta) {
+    html += `<h3>🍽️ ${esc(meta.nazwa)}</h3>
+      <p class="muted">${meta.trener ? 'Trener: ' + esc(meta.trener) + ' · ' : ''}${meta.zawodnik ? 'Zawodnik: ' + esc(meta.zawodnik) : ''}</p>
+      ${meta.notes ? `<p class="muted">📝 ${esc(meta.notes)}</p>` : ''}
+      <div class="modal-btns">
+        <button class="btn" id="btn-nutrition-import">⬆ Wczytaj nowy plan żywieniowy</button>
+        <button class="btn btn-danger" id="btn-nutrition-remove">Usuń etykietę</button>
+      </div>`;
+  } else {
+    html += `<h3>🍽️ Plan żywieniowy od trenera</h3>
+      <p class="muted">Wczytaj plik z celem kalorycznym/białkowym i listą suplementów — osobny plik od planu treningowego.</p>
+      <div class="modal-btns">
+        <button class="btn btn-primary" id="btn-nutrition-import">⬆ Wczytaj plan żywieniowy (.md)</button>
+        <button class="btn" id="btn-nutrition-template">⬇ Pobierz szablon dla trenera</button>
+      </div>`;
+  }
+  html += `<input type="file" id="nutrition-file" accept=".md,.markdown,.txt,text/markdown,text/plain" class="hidden"></div>`;
+  return html;
+}
+function bindNutritionPlanCard() {
+  const imp = document.getElementById('btn-nutrition-import');
+  if (imp) imp.addEventListener('click', () => document.getElementById('nutrition-file').click());
+  const tpl = document.getElementById('btn-nutrition-template');
+  if (tpl) tpl.addEventListener('click', () => saveFile('dieta-trenera-szablon.md', nutritionTemplateMd(), 'text/markdown'));
+  const rm = document.getElementById('btn-nutrition-remove');
+  if (rm) rm.addEventListener('click', () => {
+    showModal(`<h3>Usunąć etykietę planu żywieniowego?</h3>
+      <p>Cel kaloryczny, białko g/kg i lista suplementów ZOSTAJĄ takie, jak ustawił trener — to tylko czyści informację "skąd pochodzi plan". Żeby cofnąć konkretne liczby, zmień je ręcznie w Ustawieniach.</p>
+      <div class="modal-btns"><button class="btn" onclick="closeModal()">Wróć</button>
+      <button class="btn btn-danger" id="m-nutrition-rm">Usuń etykietę</button></div>`);
+    document.getElementById('m-nutrition-rm').onclick = () => { S.nutritionPlanMeta = null; save(); closeModal(); render(); };
+  });
+  const file = document.getElementById('nutrition-file');
+  if (file) file.addEventListener('change', ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    f.text().then(txt => {
+      const { plan, errors } = parseNutritionPlanText(txt);
+      if (errors.length) {
+        showModal(`<h3>Plik diety zawiera błędy</h3>${errors.map(e => `<p class="warn-line">• ${esc(e)}</p>`).join('')}
+          <button class="btn btn-full" onclick="closeModal()">OK</button>`);
+        return;
+      }
+      if (plan.proteinPerKg != null) S.settings.proteinPerKg = plan.proteinPerKg;
+      if (plan.kcalAdjustMin != null) { S.settings.kcalAdjustMin = plan.kcalAdjustMin; S.settings.kcalAdjustMax = plan.kcalAdjustMax; }
+      if (plan.fiberFocus) { S.settings.fiberFocus = true; if (plan.fiberTargetG != null) S.settings.fiberTargetG = plan.fiberTargetG; }
+      if (plan.supplements.length) S.supplements = plan.supplements;
+      S.nutritionPlanMeta = { trener: plan.meta.trener, zawodnik: plan.meta.zawodnik, nazwa: plan.meta.nazwa, notes: plan.notes };
+      save(); render();
+      toast(`Wczytano plan żywieniowy „${plan.meta.nazwa}".`, 5000);
+    });
+  });
+}
+
 function renderNutrition() {
   const N = PLAN_DATA.nutrition;
   const today = todayISO();
@@ -2361,21 +2581,32 @@ function renderNutrition() {
   const bw = n.weight || lastWeight();
   const proteinTarget = bw ? Math.round(bw * S.settings.proteinPerKg) : null;
   const trainedToday = S.sessions.some(s => s.date === today) || (S.activeSession && S.activeSession.date === today);
-  const kcalTarget = S.settings.kcalMaintenance ? S.settings.kcalMaintenance + (trainedToday ? N.kcalSurplusTraining : 0) : null;
 
-  let html = `<div class="card">
-    <h3>🍗 Dziś · ${fmtDate(today)} ${trainedToday ? '· <span class="chip chip-hint">dzień treningowy +' + N.kcalSurplusTraining + ' kcal</span>' : ''}</h3>
+  const adjMin = S.settings.kcalAdjustMin || 0, adjMax = S.settings.kcalAdjustMax || 0;
+  const hasGoal = adjMin !== 0 || adjMax !== 0;
+  let kcalTargetText = null;
+  if (S.settings.kcalMaintenance) {
+    if (hasGoal) {
+      const lo = S.settings.kcalMaintenance + Math.min(adjMin, adjMax);
+      const hi = S.settings.kcalMaintenance + Math.max(adjMin, adjMax);
+      kcalTargetText = lo === hi ? `${lo}` : `${lo}–${hi}`;
+    } else {
+      kcalTargetText = `${S.settings.kcalMaintenance + (trainedToday ? N.kcalSurplusTraining : 0)}`;
+    }
+  }
+
+  let html = nutritionPlanCard();
+
+  html += `<div class="card">
+    <h3>🍗 Dziś · ${fmtDate(today)} ${!hasGoal && trainedToday ? '· <span class="chip chip-hint">dzień treningowy +' + N.kcalSurplusTraining + ' kcal</span>' : ''}</h3>
     <div class="nu-grid">
       <div class="nu-field"><label>Waga ciała (kg)</label><input type="number" step="0.1" inputmode="decimal" id="nu-weight" value="${n.weight ?? ''}" placeholder="${bw ?? '—'}"></div>
-      <div class="nu-field"><label>Kalorie ${kcalTarget ? `(cel ${kcalTarget})` : '(ustaw maintenance w Planie)'}</label><input type="number" inputmode="numeric" id="nu-kcal" value="${n.kcal ?? ''}"></div>
+      <div class="nu-field"><label>Kalorie ${kcalTargetText ? `(cel ${kcalTargetText})` : '(ustaw maintenance w Planie)'}</label><input type="number" inputmode="numeric" id="nu-kcal" value="${n.kcal ?? ''}"></div>
       <div class="nu-field"><label>Białko g ${proteinTarget ? `(cel ${proteinTarget} g = ${S.settings.proteinPerKg} g/kg)` : '(podaj wagę)'}</label><input type="number" inputmode="numeric" id="nu-protein" value="${n.protein ?? ''}"></div>
+      <div class="nu-field"><label>Błonnik g${S.settings.fiberTargetG ? ` (cel ${S.settings.fiberTargetG} g)` : ''}</label><input type="number" inputmode="numeric" id="nu-fiber" value="${n.fiber ?? ''}"></div>
       <div class="nu-field"><label>Nawodnienie (litry)</label>
         <div class="stepper"><button data-step="-0.25">−</button><input type="number" step="0.25" inputmode="decimal" id="nu-water" value="${n.water || 0}"><button data-step="0.25">+</button></div>
       </div>
-    </div>
-    <div class="nu-checks">
-      <label class="check ${n.collagen ? 'on' : ''}"><input type="checkbox" id="nu-collagen" ${n.collagen ? 'checked' : ''}> Kolagen 15–20 g + wit. C (30–60 min przed treningiem/rehabem)</label>
-      <label class="check ${n.omega3 ? 'on' : ''}"><input type="checkbox" id="nu-omega" ${n.omega3 ? 'checked' : ''}> Omega-3 (2–3 g EPA/DHA lub ryba)</label>
     </div>
     ${proteinTarget && n.protein != null ? proteinBar(n.protein, proteinTarget) : ''}
   </div>`;
@@ -2383,28 +2614,68 @@ function renderNutrition() {
   const stag = weightStagnation();
   if (stag) html += `<div class="banner banner-warn">⚖️ Waga stoi od ~${stag} dni. ${esc(N.stagnation)}</div>`;
 
+  // ---- Trendy: waga ciała + obwody, ten sam wykres co progresja obciążenia ----
+  const trendMetric = view.dataset.trendMetric || 'weight';
+  const trendOptions = [{ id: 'weight', label: 'Waga ciała (kg)' }, ...MEASUREMENT_FIELDS.map(f => ({ id: f.id, label: f.label + ' (cm)' }))];
+  const series = trendSeries(trendMetric);
+  html += `<div class="card">
+    <h3>📈 Trendy</h3>
+    <select id="trend-sel" class="select-full">${trendOptions.map(o => `<option value="${o.id}" ${o.id === trendMetric ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>
+    ${buildTrendChart(trendMetric)}
+    ${series.length ? `<div class="chart-legend">${trendBadge(series)}</div>` : ''}
+  </div>`;
+
+  // ---- Obwody ciała (raz w tygodniu) ----
+  const m = measFor(today);
+  html += `<div class="card">
+    <h3>📏 Obwody ciała</h3>
+    <p class="muted">Zalecane raz w tygodniu, rano na czczo, dla porównywalnych wyników.</p>
+    <div class="nu-grid">
+      ${MEASUREMENT_FIELDS.map(f => `<div class="nu-field"><label>${esc(f.label)} (cm)</label><input type="number" step="0.5" inputmode="decimal" data-meas="${f.id}" value="${m[f.id] ?? ''}"></div>`).join('')}
+    </div>
+  </div>`;
+
+  // ---- Suplementy — lista w pełni edytowalna, import z pliku diety ją podmienia ----
+  html += `<div class="card">
+    <h3>💊 Suplementy — dziś</h3>
+    ${S.supplements.map(s => `
+      <div class="check ${n[s.id] ? 'on' : ''}">
+        <input type="checkbox" data-supp="${esc(s.id)}" id="supp-cb-${esc(s.id)}" ${n[s.id] ? 'checked' : ''}>
+        <label for="supp-cb-${esc(s.id)}" style="flex:1; cursor:pointer;"><b>${esc(s.name)}</b><br>
+          <span class="muted">${esc(s.dose)}${s.timing && s.timing !== 'codziennie' ? ' · ' + esc(s.timing) : ''}</span></label>
+        <button class="link-btn" data-supp-remove="${esc(s.id)}" title="Usuń z listy">✕</button>
+      </div>`).join('')}
+    <div class="si-row" style="margin-top:10px">
+      <div class="si-field"><label>Nazwa</label><input type="text" id="supp-new-name" placeholder="np. Cynk"></div>
+      <div class="si-field"><label>Dawka</label><input type="text" id="supp-new-dose" placeholder="np. 15 mg"></div>
+    </div>
+    <button class="btn btn-full" id="supp-add-btn">+ Dodaj suplement</button>
+  </div>`;
+
   html += `<div class="card"><h3>Zasady</h3><ul class="rules">
-    <li>Białko: ${N.proteinPerKgMin}–${N.proteinPerKgMax} g/kg (górny zakres — gojenie ścięgna). Rozkład: ${esc(N.proteinPerMeal)}.</li>
+    <li>Białko: ${N.proteinPerKgMin}–${N.proteinPerKgMax} g/kg. Rozkład: ${esc(N.proteinPerMeal)}.</li>
     <li>${esc(N.kcalRule)}</li>
     <li>${esc(N.carbsPreWorkout)}.</li>
-    <li>${esc(N.collagen)}.</li>
-    <li>${esc(N.omega3)}.</li>
+    ${S.settings.fiberFocus ? `<li>Priorytet: odpowiednia podaż błonnika każdego dnia${S.settings.fiberTargetG ? ` (cel ~${S.settings.fiberTargetG} g)` : ''} — warzywa, pełne ziarna, rośliny strączkowe.</li>` : ''}
   </ul></div>`;
 
   html += `<div class="card"><h3>Szablon dnia</h3><div style="overflow-x:auto"><table class="tbl">
     <tr><th>Posiłek</th><th>Timing</th><th>Białko</th><th>Uwaga</th></tr>
-    ${N.meals.map(m => `<tr><td>${esc(m.name)}</td><td>${esc(m.timing)}</td><td>${esc(m.protein)}</td><td>${esc(m.note)}</td></tr>`).join('')}
+    ${N.meals.map(m2 => `<tr><td>${esc(m2.name)}</td><td>${esc(m2.timing)}</td><td>${esc(m2.protein)}</td><td>${esc(m2.note)}</td></tr>`).join('')}
   </table></div></div>`;
 
   const dates = Object.keys(S.nutrition).sort().reverse().slice(0, 10).filter(d => d !== today);
   if (dates.length) {
     html += `<div class="card"><h3>Ostatnie dni</h3>${dates.map(d => {
       const x = S.nutrition[d];
-      return `<div class="nu-hist">${fmtDate(d)}: ${x.weight ? x.weight + ' kg · ' : ''}${x.kcal ?? '—'} kcal · ${x.protein ?? '—'} g białka ${x.collagen ? '· 🦴' : ''}${x.omega3 ? '· 🐟' : ''}</div>`;
+      const taken = S.supplements.filter(s => x[s.id]).length;
+      return `<div class="nu-hist">${fmtDate(d)}: ${x.weight ? x.weight + ' kg · ' : ''}${x.kcal ?? '—'} kcal · ${x.protein ?? '—'} g białka${x.fiber != null ? ' · ' + x.fiber + ' g błonnika' : ''}${S.supplements.length ? ` · 💊 ${taken}/${S.supplements.length}` : ''}</div>`;
     }).join('')}</div>`;
   }
 
   view.innerHTML = html;
+
+  bindNutritionPlanCard();
 
   const bind = (id, key, isNum = true) => {
     const inp = document.getElementById(id);
@@ -2413,9 +2684,34 @@ function renderNutrition() {
       save(); render();
     });
   };
-  bind('nu-weight', 'weight'); bind('nu-kcal', 'kcal'); bind('nu-protein', 'protein'); bind('nu-water', 'water');
-  document.getElementById('nu-collagen').addEventListener('change', ev => { n.collagen = ev.target.checked; save(); render(); });
-  document.getElementById('nu-omega').addEventListener('change', ev => { n.omega3 = ev.target.checked; save(); render(); });
+  bind('nu-weight', 'weight'); bind('nu-kcal', 'kcal'); bind('nu-protein', 'protein'); bind('nu-water', 'water'); bind('nu-fiber', 'fiber');
+
+  const trendSel = document.getElementById('trend-sel');
+  if (trendSel) trendSel.addEventListener('change', ev => { view.dataset.trendMetric = ev.target.value; render(); });
+
+  view.querySelectorAll('[data-meas]').forEach(inp => inp.addEventListener('change', () => {
+    m[inp.dataset.meas] = inp.value === '' ? null : +inp.value; save(); render();
+  }));
+
+  view.querySelectorAll('[data-supp]').forEach(cb => cb.addEventListener('change', () => {
+    n[cb.dataset.supp] = cb.checked; save(); render();
+  }));
+  view.querySelectorAll('[data-supp-remove]').forEach(b => b.addEventListener('click', () => {
+    S.supplements = S.supplements.filter(s => s.id !== b.dataset.suppRemove);
+    save(); render();
+  }));
+  const addBtn = document.getElementById('supp-add-btn');
+  if (addBtn) addBtn.addEventListener('click', () => {
+    const nameInp = document.getElementById('supp-new-name');
+    const doseInp = document.getElementById('supp-new-dose');
+    const name = nameInp.value.trim();
+    if (!name) { toast('Podaj nazwę suplementu.'); return; }
+    const id = slugify(name);
+    if (S.supplements.some(s => s.id === id)) { toast('Taki suplement już jest na liście.'); return; }
+    S.supplements.push({ id, name, dose: doseInp.value.trim(), timing: 'codziennie' });
+    save(); render();
+  });
+
   view.querySelectorAll('.stepper button').forEach(b => b.addEventListener('click', () => {
     const inp = b.parentElement.querySelector('input');
     inp.value = Math.max(0, Math.round(((+inp.value || 0) + +b.dataset.step) * 100) / 100);
@@ -2616,9 +2912,14 @@ function renderPlan() {
   html += `<div class="card"><h3>⚙️ Ustawienia</h3>
     <div class="nu-grid">
       <div class="nu-field"><label>Waga ciała (kg)</label><input type="number" step="0.1" id="set-bw" value="${S.settings.bodyWeightKg ?? ''}"></div>
-      <div class="nu-field"><label>Białko (g/kg)</label><input type="number" step="0.1" min="1.8" max="2.2" id="set-ppk" value="${S.settings.proteinPerKg}"></div>
+      <div class="nu-field"><label>Białko (g/kg)</label><input type="number" step="0.1" min="1" max="3" id="set-ppk" value="${S.settings.proteinPerKg}"></div>
       <div class="nu-field"><label>Kcal maintenance</label><input type="number" id="set-kcal" value="${S.settings.kcalMaintenance ?? ''}"></div>
+      <div class="nu-field"><label>Cel kcal: od</label><input type="number" id="set-kcal-adj-min" value="${S.settings.kcalAdjustMin || ''}" placeholder="np. -500"></div>
+      <div class="nu-field"><label>Cel kcal: do</label><input type="number" id="set-kcal-adj-max" value="${S.settings.kcalAdjustMax || ''}" placeholder="np. -400"></div>
+      <div class="nu-field"><label>Cel błonnika (g, opcj.)</label><input type="number" id="set-fiber-target" value="${S.settings.fiberTargetG ?? ''}"></div>
     </div>
+    <p class="muted">"Cel kcal: od/do" — ujemne liczby = deficyt, dodatnie = nadwyżka względem Kcal maintenance (np. -500 do -400 = deficyt 400–500 kcal). Puste/zero po obu stronach = zwykłe utrzymanie z automatycznym bonusem w dni treningowe.</p>
+    <label class="check ${S.settings.fiberFocus ? 'on' : ''}"><input type="checkbox" id="set-fiber-focus" ${S.settings.fiberFocus ? 'checked' : ''}> Priorytet: skupić się na błonniku</label>
     <div class="modal-btns">
       <button class="btn" id="btn-export">⬇ Eksport danych</button>
       <button class="btn" id="btn-import">⬆ Import</button>
@@ -2657,6 +2958,10 @@ function renderPlan() {
     S.settings[key] = ev.target.value === '' ? null : +ev.target.value; save();
   });
   bindSet('set-bw', 'bodyWeightKg'); bindSet('set-ppk', 'proteinPerKg'); bindSet('set-kcal', 'kcalMaintenance');
+  document.getElementById('set-kcal-adj-min').addEventListener('change', ev => { S.settings.kcalAdjustMin = ev.target.value === '' ? 0 : +ev.target.value; save(); render(); });
+  document.getElementById('set-kcal-adj-max').addEventListener('change', ev => { S.settings.kcalAdjustMax = ev.target.value === '' ? 0 : +ev.target.value; save(); render(); });
+  document.getElementById('set-fiber-target').addEventListener('change', ev => { S.settings.fiberTargetG = ev.target.value === '' ? null : +ev.target.value; save(); render(); });
+  document.getElementById('set-fiber-focus').addEventListener('change', ev => { S.settings.fiberFocus = ev.target.checked; save(); render(); });
 
   document.getElementById('btn-export').addEventListener('click', () => {
     saveFile(`trening-backup-${todayISO()}.json`, JSON.stringify(S, null, 2), 'application/json');
