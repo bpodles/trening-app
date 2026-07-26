@@ -83,13 +83,22 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html { font-size: 16px; }
+/* Strona sama nigdy się nie przewija — przewija się tylko #app-scroll.
+   To omija znany bug Safari na iOS, w którym position:fixed "ucieka"
+   podczas przewijania całego dokumentu (pasek chowa/pokazuje adres URL). */
+html, body { height: 100%; overflow: hidden; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
-  padding-bottom: calc(122px + env(safe-area-inset-bottom));
   transition: background 0.15s ease, color 0.15s ease;
+}
+#app-scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(122px + env(safe-area-inset-bottom));
 }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 :focus:not(:focus-visible) { outline: none; }
@@ -436,12 +445,14 @@ body {
 </style>
 </head>
 <body>
-<header id="topbar">
-  <div id="topbar-title">Trening <span id="app-ver" class="app-ver"></span></div>
-  <div id="topbar-meta"></div>
-</header>
+<div id="app-scroll">
+  <header id="topbar">
+    <div id="topbar-title">Trening <span id="app-ver" class="app-ver"></span></div>
+    <div id="topbar-meta"></div>
+  </header>
 
-<main id="view"></main>
+  <main id="view"></main>
+</div>
 
 <div id="rest-timer" class="hidden">
   <div class="rt-info">
@@ -469,7 +480,7 @@ body {
 'use strict';
 
 // Numer wersji aplikacji — podbijany przy każdej publikacji artifactu.
-const APP_VERSION = '008';
+const APP_VERSION = '009';
 
 // ============================================================
 // DANE PLANU — powrót do treningów po epicondylitis lateralis
@@ -1725,16 +1736,17 @@ function toast(msg, ms = 3500) {
 
 let currentTab = 'workout';
 const view = document.getElementById('view');
+const appScroll = document.getElementById('app-scroll');
 
 // resetScroll=true → nowy "ekran" (zmiana zakładki, wybór dnia, start/koniec treningu): wróć na górę.
 // resetScroll=false (domyślnie) → drobna aktualizacja w miejscu (zapis serii, checkbox, pole): zostań tam, gdzie był użytkownik.
 function render(resetScroll) {
-  const prevScroll = window.scrollY;
+  const prevScroll = appScroll.scrollTop;
   document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === currentTab));
   updateTopbar();
   updateRehabBadge();
   ({ workout: renderWorkout, history: renderHistory, nutrition: renderNutrition, rehab: renderRehab, plan: renderPlan })[currentTab]();
-  window.scrollTo(0, resetScroll ? 0 : prevScroll);
+  appScroll.scrollTop = resetScroll ? 0 : prevScroll;
 }
 document.getElementById('tabbar').addEventListener('click', e => {
   const t = e.target.closest('.tab'); if (!t) return;
